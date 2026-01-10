@@ -1,0 +1,16 @@
+version: '3.8'
+services:
+  data-cloud:
+    build: ./data_cloud
+    ports:
+      - "8000:8000"
+    volumes:
+      - ~/.aws:/root/.aws
+      - ./my_logger_pkg:/app/my_logger_pkg
+  
+  data-preprocess:
+    build: ./data_preprocess
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./my_logger_pkg:/app/my_logger_pkg
