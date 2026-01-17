@@ -2,33 +2,39 @@ import pandas as pd
 from .my_logger_pkg import my_logger
 from typing import Dict, Tuple
 from ..seasonality import NoSeasonalityStrategy
-from ..classes import TreeModel, SeasonalityStrategy, RFGridParamsConfig, RFConfig, AnalysisConfig
+from ..classes import Model, SeasonalityStrategy, RFGridParamsConfig, ModelConfigparams, AnalysisConfig
 from sklearn.model_selection import GridSearchCV
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import TimeSeriesSplit
-from .helpers import TrainTestCache, RandomForestTrainer, FeatureAnalyzer
+from ..helpers import TrainTestCache, TrainerImpl, FeatureAnalyzer
 
 
-class RandomForest(TreeModel):
-    def __init__(self, param_grid: RFGridParamsConfig, config: RFConfig, 
+
+
+class RandomForest(Model):
+    def __init__(self, param_grid: RFGridParamsConfig, config: ModelConfigparams, 
                  dataset_b: Dict, seasonality_strategy: SeasonalityStrategy = NoSeasonalityStrategy()):
+        self.param_grid:RFGridParamsConfig = param_grid
         self.dataset_b: Dict = dataset_b
         self.state_seed: int = config.state_seed
         self.seasonality_strategy: SeasonalityStrategy = seasonality_strategy
+        self.n_jobs = config.n_jobs
+        self.k_fold = config.k_fold
         my_logger.info(f"Initializing RandomForest with state_seed={self.state_seed}, k_fold={config.k_fold}")
         
-        self.grid_rf: GridSearchCV = GridSearchCV(
-            RandomForestRegressor(random_state=self.state_seed),
-            param_grid, 
-            cv=TimeSeriesSplit(n_splits=config.k_fold), 
-            return_train_score=False, 
-            n_jobs=config.n_jobs
-        )
-        
         self._tt_cache = TrainTestCache()
-        self._trainer = RandomForestTrainer()
+        self._trainer = TrainerImpl()
         self._analyzer = FeatureAnalyzer(self._trainer)
        
+    def _make_grid(self) -> GridSearchCV:
+        return GridSearchCV(
+            RandomForestRegressor(random_state=self.state_seed),
+            self.param_grid,
+            cv=TimeSeriesSplit(n_splits=self.k_fold),
+            return_train_score=False,
+            n_jobs=self.n_jobs
+        )
+
     def train_test_fn(self, build_id: int, fold_key: str) -> Tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series]:
         analysis = AnalysisConfig(
             build_id=build_id,
@@ -38,13 +44,13 @@ class RandomForest(TreeModel):
         )
         return self._tt_cache.get(analysis)
     
-    
-    def predict(self, X_train: pd.DataFrame, y_train: pd.Series, X_test: pd.DataFrame, y_test: pd.Series) -> pd.Series:
-        analysis = AnalysisConfig(grid_rf=self.grid_rf)
+
+    def predict(self, X_train: pd.DataFrame, y_train: pd.Series, X_test: pd.DataFrame, y_test: pd.Series, grid_rf:GridSearchCV) -> pd.Series:
+        analysis = AnalysisConfig(grid=grid_rf)
         return self._trainer.fit_predict(analysis, X_train, y_train, X_test, y_test)
 
 
-    def permutation_importance(self, build_id: int, fold_key: str, iterations: int = 10) -> Dict[str, Dict[str, float]]:
+    def permutation_importance(self, build_id: int, fold_key: str, grid_rf:GridSearchCV, iterations: int = 10) -> Dict[str, Dict[str, float]]:
         analysis = AnalysisConfig(
             build_id=build_id,
             fold_key=fold_key,
@@ -52,17 +58,17 @@ class RandomForest(TreeModel):
             iterations=iterations,
             state_seed=self.state_seed,
             trainer_fn=self.train_test_fn,
-            grid_rf=self.grid_rf
+            grid=grid_rf
         )
         return self._analyzer.permutation_importance(analysis)
 
-    def feature_importance(self, build_id: int, fold_key: str) -> pd.Series:
+    def feature_importance(self, build_id: int, fold_key: str, grid_rf:GridSearchCV) -> pd.Series:
         analysis = AnalysisConfig(
             build_id=build_id,
             fold_key=fold_key,
             dataset_b=self.dataset_b,
             trainer_fn=self.train_test_fn,
-            grid_rf=self.grid_rf
+            grid=grid_rf
         )
         return self._analyzer.feature_importance(analysis)
 
@@ -70,5 +76,20 @@ class RandomForest(TreeModel):
     def random_forest(self, build_id: str, fold_key: str) -> Tuple[pd.Series, pd.Series]:
         my_logger.info(f"Starting random_forest for build_id={build_id}, fold_key={fold_key}")
         X_train, y_train, X_test, y_test = self.train_test_fn(build_id,fold_key)
-        y_pred = self.predict(X_train, y_train, X_test, y_test)
-        return y_pred, y_test
+
+        grid = self._make_grid()
+
+        analysis = AnalysisConfig(
+            build_id=build_id,
+            fold_key=fold_key,
+            dataset_b=self.dataset_b,
+            grid=grid,
+            trainer_fn=self.train_test_fn,
+            strategy=self.seasonality_strategy
+        )
+
+        y_pred = self._trainer.fit_predict(
+            analysis, X_train, y_train, X_test, y_test
+        )
+
+        return y_pred, y_test, grid

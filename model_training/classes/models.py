@@ -16,7 +16,17 @@ class RFGridParamsConfig(BaseModel):
         'max_depth': [None]
         }
     
-class RFConfig(BaseModel):
+class XGGridParamsConfig(BaseModel):
+    parameters: Dict[str, List[Any]] = {
+        'n_estimators': [100, 500, 1000],
+        'max_depth': [3, 6],
+        'learning_rate': [0.05, 0.1],
+        'subsample': [0.8, 1.0],
+        'colsample_bytree': [0.8, 1.0],
+    }
+
+    
+class ModelConfigparams(BaseModel):
     k_fold: int = 3
     n_jobs: int = 4
     state_seed: int = 42
@@ -25,11 +35,9 @@ class BaseLineModelConfig(BaseModel):
     models:Dict[str,BaselineModel]
     
 class AnalysisConfig(BaseModel):
-    build_id: int
-    fold_key: str
-    dataset_b: Dict
-    grid_rf: GridSearchCV
-    trainer_fn: Callable
-    strategy: SeasonalityStrategy
-    iterations: int = 10
-    state_seed: int = 42
+    build_id: Optional[int] = None
+    fold_key: Optional[str] = None
+    dataset_b: Optional[Dict] = None
+    grid: Optional[GridSearchCV] = None
+    trainer_fn: Optional[Callable] = None
+    strategy: Optional[SeasonalityStrategy] = None

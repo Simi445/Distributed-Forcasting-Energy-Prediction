@@ -3,8 +3,8 @@ from .my_logger_pkg import my_logger
 from typing import Optional, Dict, Tuple, Callable,Any
 from functools import reduce
 
-from .classes import BaselineModel, NaiveModel, SeasonConfig,Organizer,Baseline,BaseLineModelConfig
-from auxiliary import BaseLineDataOrganizer,SeasonMask,MetricsImpl
+from ..classes import BaselineModel, NaiveModel, SeasonConfig,Organizer,Baseline,BaseLineModelConfig
+from model_training.baseline.auxiliary import BaseLineDataOrganizer,SeasonMask,MetricsImpl
 
 
 class BaselinePredictor(BaselineModel):
@@ -14,7 +14,7 @@ class BaselinePredictor(BaselineModel):
         self.per_building = per_building
         
         self.dataset_b: Dict[int, Dict[str, Any]] = {}
-        self.data_preparator:Organizer = BaseLineDataOrganizer(per_building)
+        self.data_preparator:Organizer = BaseLineDataOrganizer(final_buildings, per_building)
     
     def get_train_test(self, build_id: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
         return self.data_preparator.prepare_train_test(build_id)
@@ -53,15 +53,15 @@ class BaselineTrainer:
     def __init__(self, final_buildings: Dict[str, int], per_building: Dict[int, pd.DataFrame], models:BaseLineModelConfig):
         self.final_buildings = final_buildings
         self.per_building = per_building
-        self.models = models
+        self.model_config = models
     
     def train_and_evaluate(self, model_name: str, build_id: int, season: str, 
                           possible_seasons: SeasonConfig, method_name: str) -> Dict[str, float]:
 
-        if model_name not in self.models:
+        if model_name not in self.model_config.models:
             raise ValueError(f"Unknown model: {model_name}. Available: {list(self.models.keys())}")
         
-        model = self.models[model_name]
+        model = self.model_config.models[model_name]
         method = getattr(model, method_name)
         
         y_pred, y_test = method(build_id, season, possible_seasons)

@@ -53,11 +53,11 @@ class InputValidator:
             raise ValueError("strategy cannot be None")
     
     @staticmethod
-    def validate_grid_rf(analysis: AnalysisConfig) -> None:
-        if analysis.grid_rf is None:
-            raise ValueError("grid_rf cannot be None")
-        if not hasattr(analysis.grid_rf, 'best_estimator_'):
-            raise AttributeError("grid_rf does not have best_estimator_ attribute")
+    def validate_grid(analysis: AnalysisConfig) -> None:
+        if analysis.grid is None:
+            raise ValueError("grid cannot be None")
+        if not hasattr(analysis.grid, 'best_estimator_'):
+            raise AttributeError("grid does not have best_estimator_ attribute")
     
     @staticmethod
     def validate_trainer_fn(analysis: AnalysisConfig) -> None:

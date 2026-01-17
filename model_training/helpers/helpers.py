@@ -2,7 +2,7 @@ import pandas as pd
 from .my_logger_pkg import my_logger
 from typing import Dict, Tuple, Callable, Any
 from ..seasonality import NoSeasonalityStrategy
-from ..classes import AnalysisConfig,Analyzer,Train,TreeModel,SeasonalityStrategy,RFGridParamsConfig,RFConfig,TrainTestCache
+from ..classes import AnalysisConfig,Analyzer,Train,TreeModel,SeasonalityStrategy,RFGridParamsConfig,RFConfig,TrainTest
 from sklearn.model_selection import GridSearchCV
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import TimeSeriesSplit
@@ -13,7 +13,7 @@ import numpy as np
 WEATHER_COL_RANGE = slice(24, 31)
 TIME_COL_RANGE = slice(31, 37)
 
-class TrainTestCache(TrainTestCache):
+class TrainTestCache(TrainTest):
     def __init__(self):
         self._tt_cache:Dict[Tuple[int,str], Any] = {}
 
@@ -30,7 +30,7 @@ class TrainTestCache(TrainTestCache):
         
         my_logger.debug(f"Cache miss for build_id={analysis.build_id}, fold_key={fold_key}. Computing train_test split.")
         train_data: pd.DataFrame = dataset_b[build_id][fold_key]['train']
-        test_data: pd.DataFrame = dataset_b[build_id][fold_key]['val']
+        test_data: pd.DataFrame = dataset_b[build_id][fold_key]['test']
         
         train_data = strategy.apply(train_data, fold_key)
 
@@ -44,21 +44,22 @@ class TrainTestCache(TrainTestCache):
         my_logger.debug(f"Cached train_test split: X_train.shape={X_train.shape}, X_test.shape={X_test.shape}")
         return (X_train,y_train,X_test,y_test)
 
-class RandomForestTrainer(Train):
-    @ValidationDecorator.validate_analysis_context(['analysis_config', 'grid_rf'])
+class TrainerImpl(Train):
+    @ValidationDecorator.validate_analysis_context(['analysis_config', 'grid'])
     def fit_predict(self, analysis:AnalysisConfig, X_train: pd.DataFrame, y_train: pd.Series, X_test: pd.DataFrame, y_test: pd.Series) -> pd.Series:
         my_logger.info(f"Starting GridSearchCV.fit with training set size {len(y_train)}")
-        analysis.grid_rf.fit(X_train, y_train)
-        my_logger.info(f"GridSearchCV completed. Best params: {analysis.grid_rf.best_params_}")
-        y_pred = pd.Series(analysis.grid_rf.predict(X_test), index=y_test.index)
+        analysis.grid.fit(X_train, y_train)
+        my_logger.info(f"GridSearchCV completed. Best params: {analysis.grid.best_params_}")
+        y_pred = pd.Series(analysis.grid.predict(X_test), index=y_test.index)
         my_logger.debug(f"Predictions generated for test set size {len(y_test)}")
         return y_pred
 
-    @ValidationDecorator.validate_analysis_context(['analysis_config', 'grid_rf'])
+    @ValidationDecorator.validate_analysis_context(['analysis_config', 'grid'])
     def predict(self, analysis:AnalysisConfig, X_test:pd.DataFrame) -> pd.Series:
         InputValidator.validate_dataframe(X_test, "X_test")
         y_pred = pd.Series(analysis.grid_rf.predict(X_test))
         return y_pred
+    
 
 class FeatureAnalyzer(Analyzer):
     def __init__(self, trainer: Train):

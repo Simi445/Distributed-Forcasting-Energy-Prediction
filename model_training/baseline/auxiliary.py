@@ -1,13 +1,13 @@
 import pandas as pd
 from sklearn.metrics import root_mean_squared_error,mean_absolute_error,r2_score
-from typing import Dict, List, Tuple, Any
-from .classes import Metrics, SeasonConfig, Mask, Organizer
+from typing import Dict, List, Tuple, Any, Optional
+from ..classes import Metrics, SeasonConfig, Mask, Organizer
 from .my_logger_pkg import my_logger
 import numpy as np
 
 class MetricsImpl(Metrics):
     @staticmethod
-    def get_metrics(pred: pd.DataFrame, test: pd.DataFrame) -> Dict[str, float]:
+    def get_metrics(pred: pd.Series, test: pd.Series) -> Dict[str, float]:
         rmse: float = root_mean_squared_error(test, pred)
         mae: float = mean_absolute_error(test, pred)
         nmae: float = (mae / (test.mean() + 1e-9))
@@ -16,7 +16,9 @@ class MetricsImpl(Metrics):
     
 class SeasonMask(Mask):
     @staticmethod
-    def get_season_mask(dataframe:pd.DataFrame, season:str, possible_seasons:SeasonConfig)-> np.ndarray:
+    def get_season_mask(dataframe:pd.DataFrame, season:str,possible_seasons: Optional[SeasonConfig] = None)-> np.ndarray:
+        if possible_seasons is None:
+            possible_seasons = SeasonConfig()
         allowed_seasons: Dict[str, List[int]] = possible_seasons.seasonMap
         if season not in allowed_seasons:
             raise ValueError(f"{season} not in the set of possible seasons!")
@@ -24,7 +26,9 @@ class SeasonMask(Mask):
         return idx.month.isin(allowed_seasons[season])
     
 class DataOrganizer(Organizer):
-    def __init__(self):
+    def __init__(self, final_buildings: Dict, per_building: Dict[int, pd.DataFrame]):
+        self.final_buildings = final_buildings
+        self.per_building = per_building
         self.dataset_b = {}
         self._train_test_sepparation()
 
@@ -64,10 +68,9 @@ class DataOrganizer(Organizer):
         return self.dataset_b
     
 class BaseLineDataOrganizer(DataOrganizer):
-    def __init__(self, per_building: Dict[int, pd.DataFrame]):
-        super().__init__()
-        self.per_building = per_building
-    
+    def __init__(self, final_buildings: Dict, per_building: Dict[int, pd.DataFrame]):
+        super().__init__(final_buildings, per_building)
+
     def prepare_train_test(self, build_id: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
         dataset: pd.DataFrame = self.per_building[build_id]
         y = dataset["meter_reading"].sort_index()
