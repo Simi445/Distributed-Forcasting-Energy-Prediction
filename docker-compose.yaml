@@ -5,12 +5,20 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ~/.aws:/root/.aws
+      - ~/.cloudflare:/root/.cloudflare
       - ./my_logger_pkg:/app/my_logger_pkg
   
   data-preprocess:
     build: ./data_preprocess
     ports:
       - "8001:8001"
+    volumes:
+      - ./my_logger_pkg:/app/my_logger_pkg
+  
+
+  model-training:
+    build: ./model_training
+    ports:
+      - "8002:8002"
     volumes:
       - ./my_logger_pkg:/app/my_logger_pkg

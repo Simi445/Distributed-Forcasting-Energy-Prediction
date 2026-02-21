@@ -71,9 +71,9 @@ class CsvToParquet(Converter):
         return res
     
 
-class AwsS3(Storage):
+class CloudFlareR2(Storage):
     def __init__(self,bucket_name:str)->None:
-        cred_file = '/root/.aws/credentials'
+        cred_file = '/root/.cloudflare/credentials'
         if os.path.exists(cred_file):
             config = configparser.ConfigParser()
             config.read(cred_file)
@@ -81,14 +81,23 @@ class AwsS3(Storage):
                 os.environ['AWS_ACCESS_KEY_ID'] = config['default'].get('aws_access_key_id', '')
                 os.environ['AWS_SECRET_ACCESS_KEY'] = config['default'].get('aws_secret_access_key', '')
                 os.environ['AWS_DEFAULT_REGION'] = config['default'].get('region', 'us-east-1')
-            my_logger.info("Loaded AWS credentials from cred file.")
+            my_logger.info("Loaded CF credentials from cred file.")
         else:
             my_logger.warning("Cred file not found; using existing environment variables or IAM roles.")
         
         self.bucket_name = bucket_name
-        self.client = boto3.client('s3')
-        self.bucket = boto3.resource('s3').Bucket(bucket_name)
-        my_logger.info("Initialized AwsS3 client and bucket.")
+        self.endpoint_url = os.environ.get('R2_ENDPOINT_URL', 'https://39209c3b1c9ee2eaac1dd5c876180d59.r2.cloudflarestorage.com')
+        self.client = boto3.client(
+            's3',
+            endpoint_url=self.endpoint_url,
+            region_name='auto'
+        )
+        self.bucket = boto3.resource(
+            's3',
+            endpoint_url=self.endpoint_url,
+            region_name='auto'
+        ).Bucket(bucket_name)
+        my_logger.info("Initialized Cloudflare R2 client and bucket.")
 
     def upload_parquet_file(self, file_name:str, object_name:str = None)->bool:
         if object_name is None:

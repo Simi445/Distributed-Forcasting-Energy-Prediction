@@ -1,13 +1,16 @@
 import pandas as pd
-from .my_logger_pkg import my_logger
-from typing import Dict, Tuple, Callable, Any
-from ..seasonality import NoSeasonalityStrategy
-from ..classes import AnalysisConfig,Analyzer,Train,TreeModel,SeasonalityStrategy,RFGridParamsConfig,RFConfig,TrainTest
+from my_logger_pkg import my_logger
+from typing import Dict, Tuple, Callable, Any, Union
+from seasonality import NoSeasonalityStrategy
+from classes import (
+    DataContext, TrainingContext, FeatureAnalysisContext,
+    Analyzer, Train, SeasonalityStrategy, RFGridParamsConfig, TrainTest
+)
 from sklearn.model_selection import GridSearchCV
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import mean_absolute_error
-from .input_validation import InputValidator, ValidationDecorator
+from helpers.input_validation import InputValidator, ValidationDecorator
 import numpy as np
 
 WEATHER_COL_RANGE = slice(24, 31)
@@ -17,18 +20,18 @@ class TrainTestCache(TrainTest):
     def __init__(self):
         self._tt_cache:Dict[Tuple[int,str], Any] = {}
 
-    @ValidationDecorator.validate_analysis_context(['analysis_config', 'build_fold_keys', 'dataset_b', 'strategy'])
-    def get(self, analysis:AnalysisConfig)->Tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series]:
-        fold_key, build_id, dataset_b, strategy = analysis.fold_key, analysis.build_id, \
-                                                  analysis.dataset_b, analysis.strategy
+    @ValidationDecorator.decorator
+    def get(self, data_ctx: DataContext, training_ctx: TrainingContext) -> Tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series]:
+        fold_key, build_id = data_ctx.fold_key, data_ctx.build_id
+        dataset_b, strategy = data_ctx.dataset_b, training_ctx.strategy
         
-        key: Tuple[int, str] = (analysis.build_id, fold_key)
+        key: Tuple[int, str] = (build_id, fold_key)
         if key in self._tt_cache:
             my_logger.debug(f"Cache hit for build_id={build_id}, fold_key={fold_key}")
             X_tr, y_tr, X_te, y_te = self._tt_cache[key]
             return (X_tr.copy(), y_tr.copy(), X_te.copy(), y_te.copy())
         
-        my_logger.debug(f"Cache miss for build_id={analysis.build_id}, fold_key={fold_key}. Computing train_test split.")
+        my_logger.debug(f"Cache miss for build_id={build_id}, fold_key={fold_key}. Computing train_test split.")
         train_data: pd.DataFrame = dataset_b[build_id][fold_key]['train']
         test_data: pd.DataFrame = dataset_b[build_id][fold_key]['test']
         
@@ -36,28 +39,35 @@ class TrainTestCache(TrainTest):
 
         X_train:pd.DataFrame = train_data.drop('meter_reading', axis=1)
         y_train: pd.Series = train_data['meter_reading']
+        InputValidator.validate_series(series=y_train, name="y_train")
 
         X_test:pd.DataFrame = test_data.drop('meter_reading', axis=1)
         y_test: pd.Series = test_data['meter_reading']
+        InputValidator.validate_series(series=y_test, name="y_test")
 
+        InputValidator.validate_train_test_lengths(X_train=X_train, X_test=X_test, y_train=y_train, y_test=y_test)
         self._tt_cache[key] = (X_train.copy(), y_train.copy(), X_test.copy(), y_test.copy())
         my_logger.debug(f"Cached train_test split: X_train.shape={X_train.shape}, X_test.shape={X_test.shape}")
         return (X_train,y_train,X_test,y_test)
 
 class TrainerImpl(Train):
-    @ValidationDecorator.validate_analysis_context(['analysis_config', 'grid'])
-    def fit_predict(self, analysis:AnalysisConfig, X_train: pd.DataFrame, y_train: pd.Series, X_test: pd.DataFrame, y_test: pd.Series) -> pd.Series:
+    @ValidationDecorator.decorator
+    def fit_predict(self, training_ctx: TrainingContext, X_train: pd.DataFrame, y_train: pd.Series, X_test: pd.DataFrame, y_test: pd.Series) -> pd.Series:
         my_logger.info(f"Starting GridSearchCV.fit with training set size {len(y_train)}")
-        analysis.grid.fit(X_train, y_train)
-        my_logger.info(f"GridSearchCV completed. Best params: {analysis.grid.best_params_}")
-        y_pred = pd.Series(analysis.grid.predict(X_test), index=y_test.index)
+        training_ctx.grid.fit(X_train, y_train)
+        my_logger.info(f"GridSearchCV completed. Best params: {training_ctx.grid.best_params_}")
+        y_pred = pd.Series(training_ctx.grid.predict(X_test), index=y_test.index)
+        InputValidator.validate_series(series=y_pred, name="y_pred")
+
         my_logger.debug(f"Predictions generated for test set size {len(y_test)}")
         return y_pred
 
-    @ValidationDecorator.validate_analysis_context(['analysis_config', 'grid'])
-    def predict(self, analysis:AnalysisConfig, X_test:pd.DataFrame) -> pd.Series:
+    @ValidationDecorator.decorator
+    def nofit_predict(self, training_ctx: TrainingContext, X_test: pd.DataFrame) -> pd.Series:
         InputValidator.validate_dataframe(X_test, "X_test")
-        y_pred = pd.Series(analysis.grid_rf.predict(X_test))
+        y_pred = pd.Series(training_ctx.grid.predict(X_test))
+        InputValidator.validate_series(series=y_pred, name="y_pred")
+        
         return y_pred
     
 
@@ -65,10 +75,9 @@ class FeatureAnalyzer(Analyzer):
     def __init__(self, trainer: Train):
         self.trainer: Train = trainer
 
-    @ValidationDecorator.validate_analysis_context(['analysis_config', 'build_fold_keys', 'dataset_b', 'autumn_train_data'])
-    def _get_correlated_columns(self, analysis:AnalysisConfig) -> Dict[str, list]:
-        
-        dataset_b, build_id = analysis.dataset_b, analysis.build_id
+    @ValidationDecorator.decorator
+    def _get_correlated_columns(self, data_ctx: DataContext) -> Dict[str, list]:
+        dataset_b, build_id = data_ctx.dataset_b, data_ctx.build_id
         data: pd.DataFrame = pd.Series(dataset_b[build_id]['autumn']['train'].columns).to_frame("y")
         primary_uses_cols: list = data[data['y'].str.contains('primary_use')]['y'].tolist()
         weather_cols: list = data.iloc[WEATHER_COL_RANGE]['y'].tolist()
@@ -83,34 +92,35 @@ class FeatureAnalyzer(Analyzer):
             "nonlinear": nonlin_columns
         }  
 
-    @ValidationDecorator.validate_analysis_context(['analysis_config', 'iterations', 'state_seed', 'trainer_fn'])
-    def permutation_importance(self, analysis:AnalysisConfig) -> Dict[str, Dict[str, float]]:
+    @ValidationDecorator.decorator
+    def permutation_importance(self, analysis_ctx: FeatureAnalysisContext, data_ctx: DataContext, 
+                               training_ctx: TrainingContext) -> Dict[str, Dict[str, float]]:
+        build_id, fold_key = data_ctx.build_id, data_ctx.fold_key
+        trainer_fn = analysis_ctx.trainer_fn
+        iterations, state_seed = analysis_ctx.iterations, analysis_ctx.state_seed
         
-        build_id, fold_key, trainer_fn,\
-        iterations, state_seed = analysis.build_id, analysis.fold_key, \
-                                            analysis.trainer_fn, analysis.iterations, analysis.state_seed
         my_logger.info(f"Computing permutation_importance for build_id={build_id}, fold_key={fold_key}, iterations={iterations}")
-        X_train, y_train, X_test, y_test = trainer_fn(build_id,fold_key)
-        y_pred = self.trainer.fit_predict(analysis, X_train, y_train, X_test, y_test)
+        X_train, y_train, X_test, y_test = trainer_fn(build_id, fold_key)
+        y_pred = self.trainer.fit_predict(training_ctx, X_train, y_train, X_test, y_test)
         
         res: Dict[str, Dict[str, float]] = {}
-        columns:Dict[str, list] = self._get_correlated_columns(analysis)
+        columns: Dict[str, list] = self._get_correlated_columns(data_ctx)
         for key in columns:
-            group_cols:list = columns[key]
-            maes:list = []
+            group_cols: list = columns[key]
+            maes: list = []
             for r in range(iterations):
                 rng: np.random.RandomState = np.random.RandomState(state_seed + r)
                 X_test_new: pd.DataFrame = X_test.copy()
                 perm_idx: np.ndarray = rng.permutation(len(X_test_new))
 
                 X_test_new[group_cols] = X_test_new[group_cols].iloc[perm_idx].to_numpy()
-                y_perm: np.ndarray = self.trainer.predict(analysis, X_test_new)
+                y_perm: np.ndarray = self.trainer.nofit_predict(training_ctx, X_test_new)
                 mae_permuted: float = mean_absolute_error(y_test, y_perm)
                 maes.append(mae_permuted)
 
             mae_permuted = np.mean(maes)
             mae_std = np.std(maes)
-            mae_original = mean_absolute_error(y_test,y_pred)
+            mae_original = mean_absolute_error(y_test, y_pred)
             res[key] = {
                 "mae_permuted": mae_permuted,
                 "mae_std": mae_std,
@@ -123,13 +133,17 @@ class FeatureAnalyzer(Analyzer):
             my_logger.warning("No feature groups were analyzed in permutation importance")
         return res
 
-    @ValidationDecorator.validate_analysis_context(['analysis_config', 'grid_rf', 'trainer_fn'])
-    def feature_importance(self, analysis:AnalysisConfig) -> pd.Series:
+    @ValidationDecorator.decorator
+    def feature_importance(self, analysis_ctx: FeatureAnalysisContext, data_ctx: DataContext,
+                          training_ctx: TrainingContext) -> pd.Series:
+        build_id, fold_key = data_ctx.build_id, data_ctx.fold_key
+        trainer_fn, grid = analysis_ctx.trainer_fn, training_ctx.grid
         
-        build_id, fold_key, trainer_fn, grid_rf = analysis.build_id, analysis.fold_key, analysis.trainer_fn, analysis.grid_rf
         my_logger.info(f"Computing feature_importance for build_id={build_id}, fold_key={fold_key}")
-        X_train, _, _, _ = trainer_fn(build_id,fold_key)
-        model: RandomForestRegressor = grid_rf.best_estimator_
+        X_train, _, _, _ = trainer_fn(build_id, fold_key)
+        model: RandomForestRegressor = grid.best_estimator_
         mdi: pd.Series = pd.Series(model.feature_importances_, index=X_train.columns).sort_values(ascending=False)
+        InputValidator.validate_series(series=mdi, name="mdi")
+
         my_logger.debug(f"Top 5 important features: {mdi.head().to_dict()}")
         return mdi

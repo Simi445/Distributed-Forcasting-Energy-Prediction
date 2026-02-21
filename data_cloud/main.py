@@ -1,5 +1,5 @@
 from classes import Converter, Storage, FileNames, HealthCheck, DownloadResponse, UploadResponse
-from class_concrete import CsvToParquet, AwsS3
+from class_concrete import CsvToParquet, CloudFlareR2
 from my_logger_pkg import my_logger
 from fastapi import FastAPI, HTTPException
 from starlette import status
@@ -42,7 +42,7 @@ def get_health() -> HealthCheck:
 )
 async def download_files() -> DownloadResponse:
     try:
-        storage: Storage = AwsS3("my-bucket-sim")
+        storage: Storage = CloudFlareR2("my-bucket-sim")
         parquet_files:dict[str,str] = storage.read_parquet_files()
         my_logger.info(f"Finished downloading.")
     except Exception as e:
@@ -65,7 +65,7 @@ async def upload_files() -> UploadResponse:
         converter: Converter = CsvToParquet(names)
         my_logger.info(f"Created the parquet object.")
         parquet_locations:list[str] = converter.data_to_parquet(names)
-        storage: Storage = AwsS3("my-bucket-sim")
+        storage: Storage = CloudFlareR2("my-bucket-sim")
         for v in parquet_locations:
             storage.upload_parquet_file(file_name=v)
             my_logger.info(f"File {v} uploaded in s3.")

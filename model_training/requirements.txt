@@ -1,0 +1,10 @@
+pandas
+boto3
+pydantic
+fastapi[standard]
+requests
+statsmodels
+pyarrow
+mpld3
+scikit-learn
+xgboost

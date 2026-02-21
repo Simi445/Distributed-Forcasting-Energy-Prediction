@@ -2,7 +2,7 @@ from .my_logger_pkg import my_logger
 from fastapi import FastAPI, HTTPException, Depends
 from starlette import status
 from .classes import ModelBuildings, State, Loader, Merger, Engineer, Selection, HealthCheck, LoadResponse, MergeResponse, \
-FeatureEngineerResponse, ACFResponse, FeatureEngineerConfig, MedianResponse, Plot, PlotResponse
+FeatureEngineerResponse, ACFResponse, FeatureEngineerConfig, MedianResponse, Plot, PlotResponse, BuildingDataResponse
 from .data_pipeline import DataLoader, FeatureEngineer, DataMerger
 from .data_selection import EnhancedSelection, ModelBSelection
 from .data_plot import PlotHelper
@@ -72,11 +72,41 @@ def merge_data(pipeline: PreprocessingPipeline = Depends(get_pipeline)) -> Merge
 @app.get("/feature_engineer", tags=["preprocessing"], response_model=FeatureEngineerResponse)
 def feature_engineer(pipeline: PreprocessingPipeline = Depends(get_pipeline)) -> FeatureEngineerResponse:
     try:
+        my_logger.info("Starting feature_engineer endpoint")
         per_building = pipeline.ensure_engineered()
-        return FeatureEngineerResponse(status="Features engineered", buildings=list(per_building.keys()))
+        my_logger.info("Got per_building from pipeline")
+        building_ids = [int(k) for k in per_building.keys()]
+        my_logger.info(f"Extracted {len(building_ids)} building IDs")
+        response = FeatureEngineerResponse(
+            status="Features engineered",
+            building_count=len(building_ids),
+            building_ids=building_ids
+        )
+        my_logger.info("Created FeatureEngineerResponse object")
+        return response
     except Exception as e:
         my_logger.exception(f"Error in feature engineering: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to engineer features: {str(e)}")
+
+@app.get("/building/{building_id}", tags=["preprocessing"], response_model=BuildingDataResponse)
+def get_building_data(building_id: int, pipeline: PreprocessingPipeline = Depends(get_pipeline)) -> BuildingDataResponse:
+    try:
+        per_building = pipeline.ensure_engineered()
+        if building_id not in per_building:
+            raise HTTPException(status_code=404, detail=f"Building {building_id} not found")
+        
+        df = per_building[building_id]
+        return BuildingDataResponse(
+            status="OK",
+            building_id=building_id,
+            data=df.to_dict(orient='list'),
+            index=[str(ts) for ts in df.index.tolist()]
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        my_logger.exception(f"Error getting building data: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get building data: {str(e)}")
 
 @app.get("/acf", tags=["preprocessing"], response_model=ACFResponse)
 def get_acf(pipeline: PreprocessingPipeline = Depends(get_pipeline)) -> ACFResponse:

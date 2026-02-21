@@ -19,7 +19,16 @@ class MergeResponse(BaseModel):
 
 class FeatureEngineerResponse(BaseModel):
     status: str
-    buildings: List[int]
+    building_count: int
+    building_ids: List[int]
+
+class BuildingDataResponse(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    
+    status: str
+    building_id: int
+    data: Dict[str, List]
+    index: List[str]
 
 class ACFResponse(BaseModel):
     status: str

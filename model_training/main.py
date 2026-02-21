@@ -1,13 +1,12 @@
-from .my_logger_pkg import my_logger
+from my_logger_pkg import my_logger
 from fastapi import FastAPI, HTTPException, Depends
+from auxiliary import DataOrganizer, MetricsImpl
+from classes import SeasonalityStrategy, HealthCheck, ModelResponse, Model, GlobalInfoRF, ModelConfigparams, RFGridParamsConfig
+from seasonality import NoSeasonalityStrategy, SeasonMaskStrategy
 from starlette import status
-from .classes import ModelBuildings, State, Loader, Merger, Engineer, Selection, HealthCheck, LoadResponse, MergeResponse, \
-FeatureEngineerResponse, ACFResponse, FeatureEngineerConfig, MedianResponse, Plot, PlotResponse
-from .data_pipeline import DataLoader, FeatureEngineer, DataMerger
-from .data_selection import EnhancedSelection, ModelBSelection
-from .data_plot import PlotHelper
-from typing import Dict, List, Any, Tuple
-import pandas as pd
+from random_forest import RandomForestImpl
+from typing import Dict,Tuple,Optional
+from model_orchestration import ModelPipeline, ModelManager
 
 app = FastAPI(
     title="Model Training API",
@@ -15,10 +14,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# _state_manager = StateManager()
+_state_manager = ModelManager()
 
-# def get_pipeline() -> PreprocessingPipeline:
-#     return PreprocessingPipeline(_state_manager)
+def get_pipeline() -> ModelPipeline:
+    return ModelPipeline(_state_manager)
 
 @app.get("/")
 async def root():
@@ -27,6 +26,7 @@ async def root():
         "version": "1.0.0",
         "endpoints": {
             "health": "/health",
+            "random_forest": "/rf/name"
         }
     }
 
@@ -43,21 +43,20 @@ def get_health() -> HealthCheck:
     return HealthCheck(status="OK")
 
 
-# @app.get("/load_data", tags=["preprocessing"], response_model=LoadResponse)
-# def load_data(pipeline: PreprocessingPipeline = Depends(get_pipeline)) -> LoadResponse:
-#     try:
-#         pipeline.ensure_loaded()
-#         return LoadResponse(status="Data loaded")
-#     except Exception as e:
-#         my_logger.exception(f"Error loading data: {e}")
-#         raise HTTPException(status_code=500, detail=f"Failed to load data: {str(e)}")
-
-
-@app.get("/random_forest", tags=["model_training"], response_model=LoadResponse)
-def load_data(pipeline: PreprocessingPipeline = Depends(get_pipeline)) -> LoadResponse:
+@app.get("/rf", tags=["model_training"], response_model=ModelResponse)
+def rf_model(season: Optional[str] = None, manager: ModelManager = Depends(get_pipeline)) -> ModelResponse:
     try:
-        pipeline.ensure_loaded()
-        return LoadResponse(status="Data loaded")
+        results = manager.model("random_forest", season)
     except Exception as e:
-        my_logger.exception(f"Error loading data: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to load data: {str(e)}")
+        my_logger.exception(f"RF exception occured!")
+        raise HTTPException(status_code=500, detail=f"Failed to train model: {str(e)}")
+    return ModelResponse(status="RF training completed successfully!", response=results)
+            
+@app.get("/svr", tags=["model_training"], response_model=ModelResponse)
+def svr_model(season: Optional[str] = None, manager: ModelManager = Depends(get_pipeline)) -> ModelResponse:
+    try:
+        results = manager.model("svr", season)
+    except Exception as e:
+        my_logger.exception(f"SVR exception occured!")
+        raise HTTPException(status_code=500, detail=f"Failed to train model: {str(e)}")
+    return ModelResponse(status="SVR training completed successfully!", response=results)

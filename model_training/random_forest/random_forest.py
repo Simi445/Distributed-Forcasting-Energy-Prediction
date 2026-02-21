@@ -1,31 +1,34 @@
 import pandas as pd
-from .my_logger_pkg import my_logger
+from my_logger_pkg import my_logger
 from typing import Dict, Tuple
-from ..seasonality import NoSeasonalityStrategy
-from ..classes import Model, SeasonalityStrategy, RFGridParamsConfig, ModelConfigparams, AnalysisConfig
+from seasonality import NoSeasonalityStrategy
+from classes import (
+    GridSearchModel, SeasonalityStrategy, RFGridParamsConfig, ModelConfigparams,
+    DataContext, TrainingContext, FeatureAnalysisContext
+)
 from sklearn.model_selection import GridSearchCV
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import TimeSeriesSplit
-from ..helpers import TrainTestCache, TrainerImpl, FeatureAnalyzer
+from helpers import FeatureAnalyzer
 
 
-
-
-class RandomForest(Model):
+class RandomForestImpl(GridSearchModel):
+    """Random Forest implementation using the GridSearchModel base class."""
+    
     def __init__(self, param_grid: RFGridParamsConfig, config: ModelConfigparams, 
                  dataset_b: Dict, seasonality_strategy: SeasonalityStrategy = NoSeasonalityStrategy()):
-        self.param_grid:RFGridParamsConfig = param_grid
-        self.dataset_b: Dict = dataset_b
-        self.state_seed: int = config.state_seed
-        self.seasonality_strategy: SeasonalityStrategy = seasonality_strategy
-        self.n_jobs = config.n_jobs
-        self.k_fold = config.k_fold
-        my_logger.info(f"Initializing RandomForest with state_seed={self.state_seed}, k_fold={config.k_fold}")
-        
-        self._tt_cache = TrainTestCache()
-        self._trainer = TrainerImpl()
+        super().__init__(
+            config=config,
+            dataset_b=dataset_b,
+            seasonality_strategy=seasonality_strategy,
+            param_grid=param_grid.parameters
+        )
+        my_logger.info(f"Initializing RandomForest with state_seed={self.state_seed}, k_fold={self.k_fold}")
         self._analyzer = FeatureAnalyzer(self._trainer)
-       
+    
+    def _get_model_name(self)->str:
+        return self.__class__.__name__
+
     def _make_grid(self) -> GridSearchCV:
         return GridSearchCV(
             RandomForestRegressor(random_state=self.state_seed),
@@ -35,61 +38,28 @@ class RandomForest(Model):
             n_jobs=self.n_jobs
         )
 
-    def train_test_fn(self, build_id: int, fold_key: str) -> Tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series]:
-        analysis = AnalysisConfig(
+    def permutation_importance(self, build_id: int, fold_key: str, grid_rf: GridSearchCV, iterations: int = 10) -> Dict[str, Dict[str, float]]:
+        data_ctx = DataContext(
             build_id=build_id,
             fold_key=fold_key,
-            dataset_b=self.dataset_b,
-            strategy=self.seasonality_strategy
+            dataset_b=self.dataset_b
         )
-        return self._tt_cache.get(analysis)
-    
-
-    def predict(self, X_train: pd.DataFrame, y_train: pd.Series, X_test: pd.DataFrame, y_test: pd.Series, grid_rf:GridSearchCV) -> pd.Series:
-        analysis = AnalysisConfig(grid=grid_rf)
-        return self._trainer.fit_predict(analysis, X_train, y_train, X_test, y_test)
-
-
-    def permutation_importance(self, build_id: int, fold_key: str, grid_rf:GridSearchCV, iterations: int = 10) -> Dict[str, Dict[str, float]]:
-        analysis = AnalysisConfig(
-            build_id=build_id,
-            fold_key=fold_key,
-            dataset_b=self.dataset_b,
+        training_ctx = TrainingContext(grid=grid_rf)
+        analysis_ctx = FeatureAnalysisContext(
             iterations=iterations,
             state_seed=self.state_seed,
-            trainer_fn=self.train_test_fn,
-            grid=grid_rf
+            trainer_fn=self.train_test_fn
         )
-        return self._analyzer.permutation_importance(analysis)
+        return self._analyzer.permutation_importance(analysis_ctx, data_ctx, training_ctx)
 
-    def feature_importance(self, build_id: int, fold_key: str, grid_rf:GridSearchCV) -> pd.Series:
-        analysis = AnalysisConfig(
+    def feature_importance(self, build_id: int, fold_key: str, grid_rf: GridSearchCV) -> Dict[str, float]:
+        data_ctx = DataContext(
             build_id=build_id,
             fold_key=fold_key,
-            dataset_b=self.dataset_b,
-            trainer_fn=self.train_test_fn,
-            grid=grid_rf
+            dataset_b=self.dataset_b
         )
-        return self._analyzer.feature_importance(analysis)
-
-
-    def random_forest(self, build_id: str, fold_key: str) -> Tuple[pd.Series, pd.Series]:
-        my_logger.info(f"Starting random_forest for build_id={build_id}, fold_key={fold_key}")
-        X_train, y_train, X_test, y_test = self.train_test_fn(build_id,fold_key)
-
-        grid = self._make_grid()
-
-        analysis = AnalysisConfig(
-            build_id=build_id,
-            fold_key=fold_key,
-            dataset_b=self.dataset_b,
-            grid=grid,
-            trainer_fn=self.train_test_fn,
-            strategy=self.seasonality_strategy
-        )
-
-        y_pred = self._trainer.fit_predict(
-            analysis, X_train, y_train, X_test, y_test
-        )
-
-        return y_pred, y_test, grid
+        training_ctx = TrainingContext(grid=grid_rf)
+        analysis_ctx = FeatureAnalysisContext(trainer_fn=self.train_test_fn)
+        
+        mdi = self._analyzer.feature_importance(analysis_ctx, data_ctx, training_ctx)
+        return mdi.to_dict()

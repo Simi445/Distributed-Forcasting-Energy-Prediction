@@ -1,10 +1,10 @@
 import pandas as pd
-from .my_logger_pkg import my_logger
+from my_logger_pkg import my_logger
 from typing import Optional, Dict, Tuple, Callable,Any
 from functools import reduce
 
-from ..classes import BaselineModel, NaiveModel, SeasonConfig,Organizer,Baseline,BaseLineModelConfig
-from model_training.baseline.auxiliary import BaseLineDataOrganizer,SeasonMask,MetricsImpl
+from classes import BaselineModel, NaiveModel, SeasonConfig,Organizer,Baseline,BaseLineModelConfig
+from auxiliary import BaseLineDataOrganizer,SeasonMask,MetricsImpl
 
 
 class BaselinePredictor(BaselineModel):
@@ -12,8 +12,6 @@ class BaselinePredictor(BaselineModel):
     def __init__(self, final_buildings: Dict[str, int], per_building: Dict[int, pd.DataFrame]):
         self.final_buildings = final_buildings
         self.per_building = per_building
-        
-        self.dataset_b: Dict[int, Dict[str, Any]] = {}
         self.data_preparator:Organizer = BaseLineDataOrganizer(final_buildings, per_building)
     
     def get_train_test(self, build_id: int) -> Tuple[pd.DataFrame, pd.DataFrame]:

@@ -2,7 +2,8 @@ from abc import ABC, abstractmethod
 import numpy as np
 from typing import List, Optional, Dict, Tuple, Union, Any
 import pandas as pd
-from .models import SeasonConfig, AnalysisConfig
+from .models import SeasonConfig, DataContext, TrainingContext, ModelConfigparams
+from sklearn.model_selection import GridSearchCV
 
 class BaselineModel(ABC):
     """Abstract base class for baseline model implementations.
@@ -34,19 +35,115 @@ class Model(ABC):
         """
         pass
 
+
     @abstractmethod
-    def predict(self, X_train, y_train, X_test, y_test, grid_rf)-> pd.Series:
-        """Train and make predictions on test data.
+    def _make_grid(self) -> GridSearchCV:
+        """Create and configure a GridSearchCV object for hyperparameter tuning.
+        
+        This method should instantiate and return a scikit-learn GridSearchCV
+        object configured with appropriate parameter grids, cross-validation
+        strategy, and scoring metrics for the specific tree-based model.
+        
+        Returns:
+            GridSearchCV: Configured grid search object ready for hyperparameter
+            optimization on the model's parameter space.
+        """
+        pass
+
+
+class GridSearchModel(Model):
+    """Base class for models using GridSearchCV for hyperparameter tuning.
+    
+    Provides shared implementation for __init__, train_test_fn, and fit methods
+    that are common across models that use scikit-learn's GridSearchCV
+    (RandomForest, XGBoost, SVR, etc.).
+    
+    Subclasses must implement:
+        - _make_grid(): Return configured GridSearchCV for the specific model
+        - _get_model_name(): Return the model name for logging
+    """
+    
+    def __init__(self, config: ModelConfigparams, dataset_b: Dict, 
+                 seasonality_strategy: 'SeasonalityStrategy', param_grid: Optional[Dict] = None):
+        """Initialize the grid search model.
         
         Args:
-            X_train: Training feature matrix.
-            y_train: Training target values.
-            X_test: Test feature matrix.
-            y_test: Test target values (for evaluation).
-            grid_rf: Grid for the model.
+            config: Model configuration parameters (k_fold, n_jobs, state_seed).
+            dataset_b: Dictionary containing dataset splits per building.
+            seasonality_strategy: Strategy for handling seasonality in training data.
+            param_grid: Optional parameter grid for hyperparameter tuning.
+        """
+        # Lazy imports to avoid circular dependencies
+        from helpers import TrainTestCache, TrainerImpl
+        
+        self.param_grid: Optional[Dict] = param_grid
+        self.dataset_b: Dict = dataset_b
+        self.state_seed: int = config.state_seed
+        self.seasonality_strategy: 'SeasonalityStrategy' = seasonality_strategy
+        self.n_jobs: int = config.n_jobs
+        self.k_fold: int = config.k_fold
+        
+        self._tt_cache = TrainTestCache()
+        self._trainer = TrainerImpl()
+    
+    def train_test_fn(self, build_id: int, fold_key: str) -> Tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series]:
+        """Get train/test split for a specific building and fold.
+        
+        Args:
+            build_id: The building identifier.
+            fold_key: The fold identifier (e.g., 'autumn', 'winter').
             
         Returns:
-            Predictions on the test set.
+            Tuple of (X_train, y_train, X_test, y_test).
+        """
+        data_ctx = DataContext(
+            build_id=build_id,
+            fold_key=fold_key,
+            dataset_b=self.dataset_b
+        )
+        training_ctx = TrainingContext(strategy=self.seasonality_strategy)
+        return self._tt_cache.get(data_ctx, training_ctx)
+    
+    def fit(self, build_id: str, fold_key: str) -> Tuple[pd.Series, pd.Series, GridSearchCV]:
+        """Train the model and return predictions.
+        
+        This is the unified training method that replaces model-specific methods
+        like random_forest(), xg_boost(), svr().
+        
+        Args:
+            build_id: The building identifier.
+            fold_key: The fold identifier (e.g., 'autumn', 'winter').
+            
+        Returns:
+            Tuple of (y_pred, y_test, fitted_grid).
+        """
+        from my_logger_pkg import my_logger
+        
+        model_name = self._get_model_name()
+        my_logger.info(f"Starting {model_name} for build_id={build_id}, fold_key={fold_key}")
+        
+        X_train, y_train, X_test, y_test = self.train_test_fn(build_id, fold_key)
+        
+        self._prepare_grid(X_train, y_train)
+        
+        grid = self._make_grid()
+        training_ctx = TrainingContext(grid=grid)
+        
+        y_pred = self._trainer.fit_predict(
+            training_ctx, X_train, y_train, X_test, y_test
+        )
+        
+        return y_pred, y_test, grid
+
+    def _prepare_grid(self, X_train: pd.DataFrame, y_train: pd.Series) -> None:
+        """Hook method for subclasses to customize grid preparation.
+        
+        Override this method in subclasses if special grid preparation is needed.
+        Default implementation does nothing.
+        
+        Args:
+            X_train: Training features (for data-dependent grid creation).
+            y_train: Training targets (for data-dependent grid creation).
         """
         pass
 
@@ -54,7 +151,6 @@ class Model(ABC):
 class Metrics(ABC):
     """Abstract base class for metric calculation components."""
     
-    @abstractmethod
     @staticmethod
     def get_metrics(pred: pd.Series, test: pd.Series) -> Dict[str, float]:
         """Calculate evaluation metrics comparing predictions to test values.
@@ -70,8 +166,7 @@ class Metrics(ABC):
 
 class Mask(ABC):
     """Abstract base class for seasonal data masking components."""
-    
-    @abstractmethod
+
     @staticmethod
     def get_season_mask(dataframe: pd.DataFrame, season: str, possible_seasons: SeasonConfig) -> np.ndarray:
         """Generate a boolean mask for data belonging to a specific season.
@@ -176,7 +271,7 @@ class Train(ABC):
         pass
     
     @abstractmethod
-    def predict(self, analysis: AnalysisConfig, X_test: pd.DataFrame) -> pd.Series:
+    def nofit_predict(self, analysis: TrainingContext, X_test: pd.DataFrame) -> pd.Series:
         """Make predictions on new data using trained model.
         
         Args:

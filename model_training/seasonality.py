@@ -1,6 +1,6 @@
 import pandas as pd
-from .classes import SeasonalityStrategy,Mask
-from model_training.baseline.auxiliary import SeasonMask
+from classes import SeasonalityStrategy,Mask
+from auxiliary import SeasonMask
 
 class NoSeasonalityStrategy(SeasonalityStrategy):
     def apply(self, train_data: pd.DataFrame, fold_key: str) -> pd.DataFrame:

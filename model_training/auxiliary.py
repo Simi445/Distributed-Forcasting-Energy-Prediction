@@ -1,41 +1,50 @@
 import pandas as pd
 from sklearn.metrics import root_mean_squared_error,mean_absolute_error,r2_score
 from typing import Dict, List, Tuple, Any, Optional
-from ..classes import Metrics, SeasonConfig, Mask, Organizer
-from .my_logger_pkg import my_logger
+from classes import Metrics, SeasonConfig, Mask, Organizer
+from my_logger_pkg import my_logger
 import numpy as np
 
 class MetricsImpl(Metrics):
     @staticmethod
     def get_metrics(pred: pd.Series, test: pd.Series) -> Dict[str, float]:
+        my_logger.debug(f"Calculating metrics for {len(pred)} predictions")
         rmse: float = root_mean_squared_error(test, pred)
         mae: float = mean_absolute_error(test, pred)
         nmae: float = (mae / (test.mean() + 1e-9))
         r_2: float = r2_score(test, pred)
+        my_logger.info(f"Metrics: RMSE={rmse:.4f}, MAE={mae:.4f}, NMAE={nmae:.4f}, R2={r_2:.4f}")
         return {"rmse": rmse, "mae": mae, "nmae": nmae, "r_2": r_2}
     
 class SeasonMask(Mask):
     @staticmethod
     def get_season_mask(dataframe:pd.DataFrame, season:str,possible_seasons: Optional[SeasonConfig] = None)-> np.ndarray:
+        my_logger.debug(f"Getting season mask for '{season}' on dataframe with {len(dataframe)} rows")
         if possible_seasons is None:
             possible_seasons = SeasonConfig()
         allowed_seasons: Dict[str, List[int]] = possible_seasons.seasonMap
         if season not in allowed_seasons:
+            my_logger.error(f"Invalid season '{season}'. Allowed: {list(allowed_seasons.keys())}")
             raise ValueError(f"{season} not in the set of possible seasons!")
         idx = dataframe.index
-        return idx.month.isin(allowed_seasons[season])
+        mask = idx.month.isin(allowed_seasons[season])
+        my_logger.debug(f"Season mask for '{season}': {mask.sum()} rows selected")
+        return mask
     
 class DataOrganizer(Organizer):
     def __init__(self, final_buildings: Dict, per_building: Dict[int, pd.DataFrame]):
+        my_logger.info(f"Initializing DataOrganizer with {len(final_buildings)} buildings")
         self.final_buildings = final_buildings
         self.per_building = per_building
         self.dataset_b = {}
         self._train_test_sepparation()
+        my_logger.info("DataOrganizer initialization complete")
 
     def _two_fold_selection(self, dataset: pd.DataFrame) -> List[Tuple[Any, Any, Any]]:
         data:pd.DataFrame = dataset
         data = data.sort_index()
         minDate, maxDate = data.index.min(), data.index.max()
+        my_logger.debug(f"Two-fold selection: date range {minDate} to {maxDate}")
         start:pd.Timestamp = minDate + pd.DateOffset(months=8)
         splits = []
         for val_start in pd.date_range(start=start, end=maxDate, freq='MS'):
@@ -44,13 +53,16 @@ class DataOrganizer(Organizer):
             if valid_end > maxDate:
                 break
             splits.append((train_end,val_start,valid_end))
-        return [splits[1],splits[-1]]
+        selected_splits = [splits[1],splits[-1]]
+        my_logger.debug(f"Selected 2 folds from {len(splits)} possible splits")
+        return selected_splits
     
     def _train_test_sepparation(self) -> None:
         if self.dataset_b:
             my_logger.info("Dataset for each building already initialized")
             return
         
+        my_logger.info(f"Starting train/test separation for {len(self.final_buildings)} buildings")
         for _, b in self.final_buildings.items():
             intervals: List[Tuple[Any, Any, Any]] = self._two_fold_selection(self.per_building[b])
             self.dataset_b[b] = {}
@@ -59,24 +71,32 @@ class DataOrganizer(Organizer):
                 data: pd.DataFrame = self.per_building[b]
                 train_data: pd.DataFrame = data[:train_end]
                 val_data: pd.DataFrame = data[val_start:val_end]
-                self.dataset_b[b]["autumn" if idx == 0 else "winter"] = {
+                season_name = "autumn" if idx == 0 else "winter"
+                self.dataset_b[b][season_name] = {
                     'train': train_data,
                     'test': val_data
                 }
+                my_logger.debug(f"Building {b} - {season_name}: train={len(train_data)}, test={len(val_data)} samples")
+        my_logger.info("Train/test separation complete")
 
     def get_dataset_b(self) -> Dict:
+        my_logger.debug(f"Returning dataset_b with {len(self.dataset_b)} buildings")
         return self.dataset_b
     
 class BaseLineDataOrganizer(DataOrganizer):
     def __init__(self, final_buildings: Dict, per_building: Dict[int, pd.DataFrame]):
+        my_logger.info("Initializing BaseLineDataOrganizer")
         super().__init__(final_buildings, per_building)
 
     def prepare_train_test(self, build_id: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        my_logger.info(f"Preparing train/test data for baseline model, build_id={build_id}")
         dataset: pd.DataFrame = self.per_building[build_id]
         y = dataset["meter_reading"].sort_index()
         all_test = []
         for season in self.dataset_b[build_id]:
             test_data = self.dataset_b[build_id][season]['test']['meter_reading']
             all_test.append(test_data)
+            my_logger.debug(f"Added {len(test_data)} test samples from {season}")
         y_test = pd.concat(all_test).sort_index()
+        my_logger.info(f"Baseline data prepared: y={len(y)}, y_test={len(y_test)} samples")
         return (y, y_test)

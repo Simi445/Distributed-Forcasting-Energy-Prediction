@@ -67,9 +67,12 @@ class PreprocessingPipeline:
             engineer: Engineer = engineer
 
         per_building: Dict[int, pd.DataFrame] = engineer.feature_engineer_buildings(full_df, FeatureEngineerConfig())
+        my_logger.info("About to store per_building in state")
         self.state.add_state("per_building", per_building)
+        my_logger.info("Stored per_building in state")
 
         my_logger.info("Features engineered successfully")
+        my_logger.info("About to return per_building from ensure_engineered")
         return per_building
 
     def ensure_acf_calculated(self) -> Tuple[List[str], List[float]]:

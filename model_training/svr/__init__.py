@@ -1,1 +1,1 @@
-from .svr import SVR
+from .svr import SVRModel

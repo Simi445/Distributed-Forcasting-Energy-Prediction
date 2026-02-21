@@ -2,7 +2,25 @@ from sklearn.model_selection import GridSearchCV
 from pydantic import BaseModel
 from typing import Callable, List, Tuple, Dict, Optional,Set,Any
 import pandas as pd
-from base_classes import BaselineModel, SeasonalityStrategy
+
+
+#Health check
+class HealthCheck(BaseModel):
+    status: str
+
+    
+#Responses
+class ModelResponse(BaseModel):
+    status: str
+    response: Dict
+
+#DTO
+class GlobalInfo(BaseModel):
+    metrics:Dict[str,float]
+
+class GlobalInfoRF(GlobalInfo):
+    p_importance:Dict
+    f_importance:Dict
 
 #Configs
 class SeasonConfig(BaseModel):
@@ -31,13 +49,32 @@ class ModelConfigparams(BaseModel):
     n_jobs: int = 4
     state_seed: int = 42
 
-class BaseLineModelConfig(BaseModel):
-    models:Dict[str,BaselineModel]
+#Model Contexts
+class DataContext(BaseModel):
+    model_config = {"arbitrary_types_allowed": True}
     
-class AnalysisConfig(BaseModel):
     build_id: Optional[int] = None
     fold_key: Optional[str] = None
     dataset_b: Optional[Dict] = None
-    grid: Optional[GridSearchCV] = None
+
+
+class TrainingContext(BaseModel):
+    model_config = {"arbitrary_types_allowed": True}
+    
+    grid: Optional[Any] = None
+    strategy: Optional[Any] = None
+
+
+class FeatureAnalysisContext(BaseModel):
+    model_config = {"arbitrary_types_allowed": True}
+    
+    iterations: Optional[int] = None
+    state_seed: Optional[int] = None
     trainer_fn: Optional[Callable] = None
-    strategy: Optional[SeasonalityStrategy] = None
+
+
+
+class BaseLineModelConfig(BaseModel):
+    models:Dict[str,Any]
+    
+
