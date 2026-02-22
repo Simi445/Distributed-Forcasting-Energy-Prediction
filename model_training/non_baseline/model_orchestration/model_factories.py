@@ -1,19 +1,11 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Optional
 from classes import (
-    SeasonalityStrategy, RFGridParamsConfig, XGGridParamsConfig, ModelConfigparams
+    SeasonalityStrategy, RFGridParamsConfig, XGGridParamsConfig, ModelConfigparams,ModelFactory
 )
-from random_forest import RandomForestImpl
-from svr import SVRModel
-from xg_boost import XGBoost
-from classes import GridSearchModel
-
-class ModelFactory(ABC):
-    """Abstract factory for creating models."""
-    
-    @abstractmethod
-    def create(self, dataset_b: Dict, strategy: SeasonalityStrategy) -> GridSearchModel:
-        pass
+from ..random_forest import RandomForestImpl
+from ..svr import SVRModel
+from ..xg_boost import XGBoost
 
 class RandomForestFactory(ModelFactory):
     def __init__(self, param_grid: Optional[RFGridParamsConfig] = None, 

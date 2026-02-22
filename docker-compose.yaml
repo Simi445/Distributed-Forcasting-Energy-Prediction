@@ -22,3 +22,10 @@ services:
       - "8002:8002"
     volumes:
       - ./my_logger_pkg:/app/my_logger_pkg
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - data-preprocess

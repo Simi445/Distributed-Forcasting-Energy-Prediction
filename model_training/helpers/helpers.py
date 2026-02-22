@@ -18,20 +18,21 @@ TIME_COL_RANGE = slice(31, 37)
 
 class TrainTestCache(TrainTest):
     def __init__(self):
-        self._tt_cache:Dict[Tuple[int,str], Any] = {}
+        self._tt_cache: Dict[Tuple[int, str, str], Any] = {}
 
     @ValidationDecorator.decorator
     def get(self, data_ctx: DataContext, training_ctx: TrainingContext) -> Tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series]:
         fold_key, build_id = data_ctx.fold_key, data_ctx.build_id
         dataset_b, strategy = data_ctx.dataset_b, training_ctx.strategy
+        strategy_name: str = type(strategy).__name__
         
-        key: Tuple[int, str] = (build_id, fold_key)
+        key: Tuple[int, str, str] = (build_id, fold_key, strategy_name)
         if key in self._tt_cache:
-            my_logger.debug(f"Cache hit for build_id={build_id}, fold_key={fold_key}")
+            my_logger.debug(f"Cache hit for build_id={build_id}, fold_key={fold_key}, strategy={strategy_name}")
             X_tr, y_tr, X_te, y_te = self._tt_cache[key]
             return (X_tr.copy(), y_tr.copy(), X_te.copy(), y_te.copy())
         
-        my_logger.debug(f"Cache miss for build_id={build_id}, fold_key={fold_key}. Computing train_test split.")
+        my_logger.debug(f"Cache miss for build_id={build_id}, fold_key={fold_key}, strategy={strategy_name}. Computing train_test split.")
         train_data: pd.DataFrame = dataset_b[build_id][fold_key]['train']
         test_data: pd.DataFrame = dataset_b[build_id][fold_key]['test']
         

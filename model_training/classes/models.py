@@ -71,10 +71,3 @@ class FeatureAnalysisContext(BaseModel):
     iterations: Optional[int] = None
     state_seed: Optional[int] = None
     trainer_fn: Optional[Callable] = None
-
-
-
-class BaseLineModelConfig(BaseModel):
-    models:Dict[str,Any]
-    
-

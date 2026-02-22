@@ -4,6 +4,9 @@ from typing import List, Optional, Dict, Tuple, Union, Any
 import pandas as pd
 from .models import SeasonConfig, DataContext, TrainingContext, ModelConfigparams
 from sklearn.model_selection import GridSearchCV
+import requests as rq
+from my_logger_pkg import my_logger
+import os
 
 class BaselineModel(ABC):
     """Abstract base class for baseline model implementations.
@@ -11,7 +14,48 @@ class BaselineModel(ABC):
     Provides an interface for implementing simple baseline models that serve
     as reference points for comparing more complex model performance.
     """
-    pass
+    @abstractmethod
+    def train(self, season: str) -> Dict[int, Tuple[pd.DataFrame, pd.DataFrame]]:
+        """Generate predictions for all buildings for a given season.
+
+        Args:
+            season: The season identifier to evaluate (e.g., 'autumn', 'winter').
+
+        Returns:
+            Dict mapping each building id to a tuple of (y_pred, y_test),
+            both indexed by timestamp.
+        """
+        pass
+
+class BaselinePredictor(BaselineModel):
+    
+    def __init__(self, data_preparator: 'Organizer', strategy: 'SeasonalityStrategy'):
+        self.data_preparator: Organizer = data_preparator
+        self.seasonality_strategy: 'SeasonalityStrategy' = strategy
+
+    @abstractmethod
+    def train(self, season: str) -> Dict[int, Tuple[pd.DataFrame, pd.DataFrame]]:
+        """Generate predictions for all buildings for a given season.
+
+        Args:
+            season: The season identifier (e.g., 'autumn', 'winter').
+
+        Returns:
+            Dict mapping each building id to a tuple of (y_pred, y_test),
+            both indexed by timestamp.
+        """
+    
+    def get_train_test(self) -> Dict[int, Tuple[pd.DataFrame, pd.DataFrame]]:
+        return self.data_preparator.prepare_train_test()
+    
+    def _apply_seasonal_filter(self, y_pred: pd.DataFrame, y_test: pd.DataFrame,
+                                season: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        y_test_masked = self.seasonality_strategy.apply(y_test, season)
+        y_pred_masked = y_pred.loc[y_test_masked.index]
+        my_logger.info(f"  Season filter '{season}': y_pred range {y_pred_masked.index.min()} to {y_pred_masked.index.max()} ({len(y_pred_masked)} samples)")
+        my_logger.info(f"  Season filter '{season}': y_test range {y_test_masked.index.min()} to {y_test_masked.index.max()} ({len(y_test_masked)} samples)")
+        return y_pred_masked, y_test_masked
+
 
 
 class Model(ABC):
@@ -188,6 +232,37 @@ class Organizer(ABC):
     and fold selections for cross-validation.
     """
     
+    _cached_data: Optional[Tuple[Dict, Dict]] = None
+
+    @classmethod
+    def initialize_organizer(cls)->Optional[Tuple[Dict,Dict]]:
+        if cls._cached_data is not None:
+            my_logger.info("Using cached organizer data")
+            return cls._cached_data
+        
+        try:
+            HOSTNAME = os.environ.get('DOCKER_DEP', 'data-preprocess')
+            PORT = os.environ.get('DOCKER_DEP_PORT', '8001')
+
+            res = rq.get((f"http://{HOSTNAME}:{PORT}/final_selection"))
+            final_buildings: Dict = res.json()["response"]
+            
+            per_building: Dict[int, pd.DataFrame] = {}
+            for category, building_id in final_buildings.items():
+                my_logger.info(f"Fetching data for building {building_id} ({category})")
+                res = rq.get(f"http://{HOSTNAME}:{PORT}/building/{building_id}")
+                building_data = res.json()
+                df = pd.DataFrame(building_data["data"])
+                df.index = pd.to_datetime(building_data["index"])
+                per_building[building_id] = df
+                
+            cls._cached_data = (final_buildings, per_building)
+            my_logger.info("Organizer data fetched and cached")
+            return cls._cached_data
+        except Exception as e:
+            my_logger.exception(f"An initialization exception occured: {e}")
+            return None
+    
     @abstractmethod
     def _two_fold_selection(self, dataset: pd.DataFrame) -> List[Tuple[Any, Any, Any]]:
         """Create two-fold splits from dataset.
@@ -282,6 +357,15 @@ class Train(ABC):
             Predictions on the test set.
         """
         pass
+
+
+class ModelFactory(ABC):
+    """Abstract factory for creating models."""
+    
+    @abstractmethod
+    def create(self, dataset_b: Dict, strategy: SeasonalityStrategy) -> GridSearchModel:
+        pass
+
     
 class Analyzer(ABC):
     """Abstract base class for feature analysis components.
@@ -315,5 +399,27 @@ class Analyzer(ABC):
             
         Returns:
             Series of feature importance scores sorted descending.
+        """
+        pass
+
+
+class Pipeline(ABC):
+    """Abstract base class for model training pipelines.
+
+    Defines a uniform interface for executing training and evaluation
+    across both baseline and non-baseline model pipelines.
+    """
+
+    @abstractmethod
+    def run(self, model_name: str, season: Optional[str] = None) -> Dict:
+        """Execute model training and evaluation.
+
+        Args:
+            model_name: The model identifier to run.
+            season: Optional season filter. If None, runs across all available
+                seasons (where supported).
+
+        Returns:
+            Dictionary of results keyed by building/season identifiers.
         """
         pass
