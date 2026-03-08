@@ -17,11 +17,14 @@ app = FastAPI(
 _state_manager_non_baseline = ModelManager()
 _state_manager_baseline = ModelManager()
 
+_non_baseline_pipeline = NonBaselinePipeline(_state_manager_non_baseline)
+_baseline_pipeline = BaselinePipeline(_state_manager_baseline)
+
 def get_non_baseline_pipeline() -> Pipeline:
-    return NonBaselinePipeline(_state_manager_non_baseline)
+    return _non_baseline_pipeline
 
 def get_baseline_pipeline() -> Pipeline:
-    return BaselinePipeline(_state_manager_baseline)
+    return _baseline_pipeline
 
 @app.get("/")
 async def root():

@@ -9,6 +9,8 @@ from classes import (
 from sklearn.model_selection import GridSearchCV
 from sklearn.svm import SVR as SklearnSVR
 from sklearn.model_selection import TimeSeriesSplit
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 import numpy as np
 
 
@@ -43,17 +45,24 @@ class SVRModel(GridSearchModel):
         """
         train_std: float = self._calculate_train_std(y_train)
         self.param_grid = {
-            "epsilon": [0.1 * train_std],
-            "C": [10 * train_std],
-            "kernel": ['rbf']
+            "svr__C": [5 * train_std, 10 * train_std, 50 * train_std, 100 * train_std],
+            "svr__epsilon": [0.001 * train_std, 0.01 * train_std, 0.1 * train_std],
+            "svr__gamma": ["scale", 0.001, 0.01],
+            "svr__kernel": ["rbf"]
         }
-        my_logger.debug(f"SVR param_grid configured with train_std={train_std:.4f}")
+        my_logger.debug(f"SVR param_grid configured with train_std={train_std:.4f}. Grid size: {np.prod([len(v) for v in self.param_grid.values()])} combinations")
 
     def _make_grid(self) -> GridSearchCV:
         if not self.param_grid:
             raise ValueError("For SVR, please call _prepare_grid(y_train) method first!")
+        
+        pipeline = Pipeline([
+            ("scaler", StandardScaler()),
+            ("svr", SklearnSVR())
+        ])
+        
         return GridSearchCV(
-            SklearnSVR(),
+            pipeline,
             self.param_grid,
             cv=TimeSeriesSplit(n_splits=self.k_fold),
             return_train_score=False,

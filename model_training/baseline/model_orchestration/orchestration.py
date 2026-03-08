@@ -1,3 +1,4 @@
+from data_plot.plot_helper import PlotHelperModel
 from my_logger_pkg import my_logger
 from typing import Dict, Any, Tuple, Optional
 from classes import SeasonConfig, Pipeline
@@ -46,7 +47,9 @@ class BaselinePipeline(Pipeline):
         train_res: Dict = model.train(season)
         for build_id, (y_pred, y_test) in train_res.items():
             metrics = MetricsImpl.get_metrics(y_pred, y_test)
-            all_metrics[build_id] = metrics
+            html:str = PlotHelperModel.plot_model_pred(build_id=build_id, pred=y_pred,test=y_test)
+            
+            all_metrics[build_id] = {"metrics": metrics, "html": html}
             my_logger.info(f"{model_name} model metrics for building {build_id}, {season}: {metrics}")
         return all_metrics
     

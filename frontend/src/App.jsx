@@ -1,34 +1,37 @@
 import { useState } from "react";
 import Chart from "./components/Chart.jsx";
-import { FadeLoader } from "react-spinners";
+import { Check, X, Circle, Loader2 } from 'lucide-react';
+import { DottedSurface } from "@/components/ui/dotted-surface";
+import IdleComponent from "@/components/IdleComponent.jsx";
+import pipelineConfig from "@/config/pipeline.json";
 
-const STEPS = [
-  { label: "Load Data",        endpoint: "/api/load_data" },
-  { label: "Merge Data",       endpoint: "/api/merge_data" },
-  { label: "Feature Engineer", endpoint: "/api/feature_engineer" },
-  { label: "ACF",              endpoint: "/api/acf" },
-  { label: "Final Selection",  endpoint: "/api/final_selection" },
-];
+const { steps: STEPS, modelSteps: MODEL_STEPS, stepStyles } = pipelineConfig;
 
-const stepStyles = {
-  done:    "bg-green-100 text-green-800",
-  error:   "bg-red-100 text-red-800",
-  running: "bg-yellow-100 text-yellow-800",
-  pending: "bg-gray-100 text-gray-500",
+const stepIcons = { 
+  running: <Loader2 className="animate-spin" />,
+  done: <Check />, 
+  error: <X/>, 
+  pending: <Circle/> 
 };
 
-const stepIcons = { done: "✓", error: "✗", pending: "○" };
-
 function StepIcon({ state }) {
-  if (state === "running") return <FadeLoader color="#854d0e" height={2} width={2} margin={1} />;
-  return <span>{stepIcons[state]}</span>;
-}
+      return <span>{stepIcons[state]}</span>;
+  }
 
 export default function App() {
   const [stepStatus, setStepStatus] = useState({});
   const [plots, setPlots] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [pipelineDone, setPipelineDone] = useState(false);
+  const [modelStepStatus, setModelStepStatus] = useState({});
+  const [modelLoading, setModelLoading] = useState(false);
+  const [modelError, setModelError] = useState(null);
+
+
+  const [modelCharts, setModelCharts] = useState([]);
+
+  const [dashboardState, setdashboardState] = useState("");
 
   async function runStep(endpoint, label) {
     setStepStatus((s) => ({ ...s, [label]: "running" }));
@@ -53,6 +56,7 @@ export default function App() {
       if (!res.ok) throw new Error(`Plot generation failed: ${res.status}`);
       const data = await res.json();
       setPlots(data.response);
+      setPipelineDone(true);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -60,29 +64,66 @@ export default function App() {
     }
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50 text-gray-800">
-      <div className="max-w-5xl mx-auto px-6 py-10">
+  async function runModelPipeline() {
+    setModelLoading(true);
+    setModelError(null);
+    setModelStepStatus({});
+    setModelCharts([]);
+    try {
+      for (const { cardTitle, modes } of MODEL_STEPS) {
+        setModelStepStatus((s) => ({ ...s, [cardTitle]: "running" }));
+        for (const [mode, endpoint] of Object.entries(modes)) {
+          const res = await fetch(endpoint);
+          if (!res.ok) {
+            setModelStepStatus((s) => ({ ...s, [cardTitle]: "error" }));
+            throw new Error(`${cardTitle} (${mode}) failed: ${res.status}`);
+          }
+          const data = await res.json();
+          const charts = Object.entries(data.response).map(([key, info]) => ({
+            title: `${cardTitle} — ${mode} — ${key}`,
+            html: info.html,
+          }));
+          setModelCharts((prev) => [...prev, ...charts]);
+        }
+        setModelStepStatus((s) => ({ ...s, [cardTitle]: "done" }));
+      }
+    } catch (e) {
+      setModelError(e.message);
+    } finally {
+      setModelLoading(false);
+    }
+  }
 
-        <header className="flex items-center gap-6 mb-8">
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-start text-gray-800 overflow-x-auto">
+      <DottedSurface />
+      <div className="max-w-7xl w-full mx-auto px-6 py-10">
+        <header className="flex items-center justify-center gap-6 mb-8">
           <h1 className="text-2xl font-bold tracking-tight">Licenta Dashboard</h1>
           <button
             onClick={runPipeline}
             disabled={loading}
-            className="px-5 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+            className="px-5 py-2 bg-black text-white rounded-lg font-medium hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
           >
             {loading ? "Running..." : "Run Pipeline"}
+          </button>
+          <button
+            onClick={runModelPipeline}
+            disabled={!pipelineDone || modelLoading}
+            className="px-5 py-2 bg-black text-white rounded-lg font-medium hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+          >
+            {modelLoading ? "Training..." : "Run Models"}
           </button>
         </header>
 
         {Object.keys(stepStatus).length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-6">
+          <div className="flex items-center justify-center gap-2 mb-6">
             {STEPS.map(({ label }) => {
               const state = stepStatus[label] ?? "pending";
               return (
                 <span
                   key={label}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium ${stepStyles[state]}`}
+                  className={`flex items-center justify-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium ${stepStyles[state]}`}
                 >
                   <StepIcon state={state} />
                   {label}
@@ -98,10 +139,45 @@ export default function App() {
           </div>
         )}
 
-        {plots && (
-          <div className="flex flex-col gap-8">
-            <Chart title="Energy Consumption" html={plots.energy} />
-            <Chart title="ACF (lag 24)"        html={plots.acf} />
+        {Object.keys(modelStepStatus).length > 0 && (
+          <div className="flex items-center justify-center gap-2 mb-6">
+            {MODEL_STEPS.map(({ cardTitle }) => {
+              const state = modelStepStatus[cardTitle] ?? "pending";
+              return (
+                <span
+                  key={cardTitle}
+                  className={`flex items-center justify-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium ${stepStyles[state]}`}
+                >
+                  <StepIcon state={state} />
+                  {cardTitle}
+                </span>
+              );
+            })}
+          </div>
+        )}
+
+        {modelError && (
+          <div className="bg-red-50 text-red-700 border border-red-200 rounded-lg px-4 py-3 mb-6 text-sm">
+            {modelError}
+          </div>
+        )}
+
+        {(plots || Object.keys(modelStepStatus).length > 0) && (
+          <div className="flex gap-8">
+            <div className="flex-1 min-w-0 transition-all duration-500 ease-in-out">
+              {plots && (
+                <div className="flex flex-col gap-8 w-full">
+                  <Chart title="Energy Consumption" html={plots.energy} />
+                  <Chart title="ACF (lag 24)"        html={plots.acf} />
+                </div>
+              )}
+            </div>
+
+            {MODEL_STEPS.every(step => modelStepStatus[step.cardTitle] === "done") && (
+              <div className="w-64 flex-shrink-0 transition-all duration-500 ease-in-out">
+                <IdleComponent changeState={(id) => setdashboardState(id)} models={MODEL_STEPS}/>
+              </div>
+            )}
           </div>
         )}
       </div>

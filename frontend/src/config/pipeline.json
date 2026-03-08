@@ -1,0 +1,67 @@
+{
+  "steps": [
+    { "label": "Load Data",        "endpoint": "/api/load_data" },
+    { "label": "Merge Data",       "endpoint": "/api/merge_data" },
+    { "label": "Feature Engineer", "endpoint": "/api/feature_engineer" },
+    { "label": "ACF",              "endpoint": "/api/acf" },
+    { "label": "Final Selection",  "endpoint": "/api/final_selection" }
+  ],
+
+  "modelSteps": [
+    {
+      "id": 0,
+      "cardTitle": "Random Forest",
+      "cardDescription": "Random Forest Model",
+      "modes": {
+        "global":   "/model/rf",
+        "autumn":   "/model/rf?season=autumn",
+        "winter":   "/model/rf?season=winter"
+      }
+    },
+    {
+      "id": 1,
+      "cardTitle": "SVR",
+      "cardDescription": "Support Vector Regression",
+      "modes": {
+        "global":   "/model/svr",
+        "autumn":   "/model/svr?season=autumn",
+        "winter":   "/model/svr?season=winter"
+      }
+    },
+    {
+      "id": 2,
+      "cardTitle": "XGBoost",
+      "cardDescription": "XGBoost Model",
+      "modes": {
+        "global":   "/model/xg_boost",
+        "autumn":   "/model/xg_boost?season=autumn",
+        "winter":   "/model/xg_boost?season=winter"
+      }
+    },
+    {
+      "id": 3,
+      "cardTitle": "Naive",
+      "cardDescription": "Naive Baseline",
+      "modes": {
+        "autumn": "/model/naive/autumn",
+        "winter": "/model/naive/winter"
+      }
+    },
+    {
+      "id": 4,
+      "cardTitle": "Mean",
+      "cardDescription": "Mean Baseline",
+      "modes": {
+        "autumn": "/model/mean/autumn",
+        "winter": "/model/mean/winter"
+      }
+    }
+  ],
+
+  "stepStyles": {
+    "done":    "bg-green-100 text-green-800",
+    "error":   "bg-red-100 text-red-800",
+    "running": "bg-yellow-100 text-yellow-800",
+    "pending": "bg-gray-100 text-gray-500"
+  }
+}

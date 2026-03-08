@@ -37,8 +37,8 @@ class DataOrganizer(Organizer):
     def __init__(self):
         final_buildings, per_building = Organizer.initialize_organizer()
         my_logger.info(f"Initializing DataOrganizer with {len(final_buildings)} buildings")
-        self.final_buildings = final_buildings
-        self.per_building = per_building
+        self.final_buildings: Dict[str,int] = final_buildings
+        self.per_building: Dict[int,pd.DataFrame] = per_building
         self.dataset_b = {}
         self._train_test_sepparation()
         my_logger.info("DataOrganizer initialization complete")
@@ -87,6 +87,10 @@ class DataOrganizer(Organizer):
     def get_dataset_b(self) -> Dict:
         my_logger.debug(f"Returning dataset_b with {len(self.dataset_b)} buildings")
         return self.dataset_b
+    
+    def get_per_building(self) -> Dict:
+        my_logger.debug(f"Returning per_building with {len(self.per_building)} buildings")
+        return self.per_building
     
 class BaseLineDataOrganizer(DataOrganizer):
     def __init__(self):

@@ -170,30 +170,3 @@ class State(ABC):
             The value that the state holds.
         """
         pass
-
-class Plot(ABC):
-    """Abstract base class for plotting."""
-    
-    @abstractmethod
-    def plot_acf(self, acf24_per_building:Dict[int, float])->str:
-        """Plot acf of buildings.
-        
-        Args:
-            acf24_per_building: 24 h acf for each building.
-
-        Returns:
-            html string object
-        """
-        pass
-
-    @abstractmethod
-    def plot_energy(self,per_building:Dict[int, pd.DataFrame])->str:
-        """Plots energy of buildings.
-        
-        Args:
-            per_building: DF of buildings.
-
-        Returns:
-            Html string object
-        """
-        pass

@@ -2,10 +2,10 @@ from .my_logger_pkg import my_logger
 from fastapi import FastAPI, HTTPException, Depends
 from starlette import status
 from .classes import ModelBuildings, State, Loader, Merger, Engineer, Selection, HealthCheck, LoadResponse, MergeResponse, \
-FeatureEngineerResponse, ACFResponse, FeatureEngineerConfig, MedianResponse, Plot, PlotResponse, BuildingDataResponse
+FeatureEngineerResponse, ACFResponse, FeatureEngineerConfig, MedianResponse, PlotResponse, BuildingDataResponse
 from .data_pipeline import DataLoader, FeatureEngineer, DataMerger
 from .data_selection import EnhancedSelection, ModelBSelection
-from .data_plot import PlotHelper
+from data_plot import PlotHelper, Plot
 from typing import Dict, List, Any, Tuple
 import pandas as pd
 from .data_orchestration import StateManager, PreprocessingPipeline

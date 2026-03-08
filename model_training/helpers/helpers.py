@@ -53,15 +53,16 @@ class TrainTestCache(TrainTest):
 
 class TrainerImpl(Train):
     @ValidationDecorator.decorator
-    def fit_predict(self, training_ctx: TrainingContext, X_train: pd.DataFrame, y_train: pd.Series, X_test: pd.DataFrame, y_test: pd.Series) -> pd.Series:
+    def fit_predict(self, training_ctx: TrainingContext, X_train: pd.DataFrame, y_train: pd.Series, X_test: pd.DataFrame, y_test: pd.Series) -> Tuple[pd.Series,Dict]:
         my_logger.info(f"Starting GridSearchCV.fit with training set size {len(y_train)}")
         training_ctx.grid.fit(X_train, y_train)
-        my_logger.info(f"GridSearchCV completed. Best params: {training_ctx.grid.best_params_}")
+        best_params: Dict = training_ctx.grid.best_params_
+        my_logger.info(f"GridSearchCV completed. Best params: {best_params}")
         y_pred = pd.Series(training_ctx.grid.predict(X_test), index=y_test.index)
         InputValidator.validate_series(series=y_pred, name="y_pred")
 
         my_logger.debug(f"Predictions generated for test set size {len(y_test)}")
-        return y_pred
+        return y_pred,best_params
 
     @ValidationDecorator.decorator
     def nofit_predict(self, training_ctx: TrainingContext, X_test: pd.DataFrame) -> pd.Series:
@@ -102,7 +103,7 @@ class FeatureAnalyzer(Analyzer):
         
         my_logger.info(f"Computing permutation_importance for build_id={build_id}, fold_key={fold_key}, iterations={iterations}")
         X_train, y_train, X_test, y_test = trainer_fn(build_id, fold_key)
-        y_pred = self.trainer.fit_predict(training_ctx, X_train, y_train, X_test, y_test)
+        y_pred, _ = self.trainer.fit_predict(training_ctx, X_train, y_train, X_test, y_test)
         
         res: Dict[str, Dict[str, float]] = {}
         columns: Dict[str, list] = self._get_correlated_columns(data_ctx)

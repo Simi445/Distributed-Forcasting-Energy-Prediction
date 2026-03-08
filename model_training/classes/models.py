@@ -17,6 +17,7 @@ class ModelResponse(BaseModel):
 #DTO
 class GlobalInfo(BaseModel):
     metrics:Dict[str,float]
+    html:str
 
 class GlobalInfoRF(GlobalInfo):
     p_importance:Dict

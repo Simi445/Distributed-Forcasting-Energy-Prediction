@@ -1,10 +1,10 @@
 import mpld3
 import matplotlib.pyplot as plt
-from ..classes import Plot
+from .base_plot import Plot, ModelPlot
 from typing import Dict, List, Tuple
 import pandas as pd
 from pathlib import Path
-from ..my_logger_pkg import my_logger
+from my_logger_pkg import my_logger
 
 class PlotHelper(Plot):
     def __init__(self, building_counts: Dict[str, int]):
@@ -19,7 +19,7 @@ class PlotHelper(Plot):
         for b_id in self.ids:
             acfs[b_id] = acf24_per_building.get(b_id, 0)
 
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(14, 4))
         ax.bar(range(len(self.ids)), [acfs.get(b, 0) for b in self.ids], 
                tick_label=[f'{cat}\n(ID: {b})' for cat, b in zip(self.categories_selected, self.ids)], align='center')
         ax.set_ylabel('ACF (lag 24)')
@@ -31,7 +31,7 @@ class PlotHelper(Plot):
     def plot_energy(self, per_building: Dict[int, pd.DataFrame]) -> str:
         my_logger.info("Starting energy consumption plot generation")
         num_buildings = len(self.ids)
-        fig, ax = plt.subplots(num_buildings, 1, figsize=(10, 8 * num_buildings // 2))
+        fig, ax = plt.subplots(num_buildings, 1, figsize=(14, 8 * num_buildings // 2))
 
         for i, (category, b) in enumerate(zip(self.categories_selected, self.ids)):
             if b in per_building and 'meter_reading' in per_building[b].columns:
@@ -47,3 +47,21 @@ class PlotHelper(Plot):
 
         html:str = mpld3.fig_to_html(fig)
         return html
+    
+class PlotHelperModel(ModelPlot):
+    @staticmethod
+    def plot_model_pred(build_id: int, pred: pd.Series, test: pd.Series) -> str:
+        my_logger.info("Starting model prediction plotting...")
+        fig, ax = plt.subplots(figsize=(14, 4))
+        
+        ax.plot(pred.index, pred.values, label='Predicted')
+        ax.plot(test.index, test.values, label='Actual')
+        ax.set_title(f'Electricity consumption for (Building {build_id})')
+        ax.legend()
+
+        plt.tight_layout()
+
+        html:str = mpld3.fig_to_html(fig)
+        plt.close(fig)
+        return html
+    

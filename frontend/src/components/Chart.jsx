@@ -6,7 +6,12 @@ export default function Chart({ title, html }) {
 
   useEffect(() => {
     if (!html) return;
-    const blob = new Blob([html], { type: "text/html" });
+    const centeredHtml = `
+      <html><head><style>
+        body { margin: 0; padding: 10px; overflow: scroll; }
+        .mpld3-figure { display: block; margin: 0 auto; }
+      </style></head><body>${html}</body></html>`;
+    const blob = new Blob([centeredHtml], { type: "text/html" });
     const url = URL.createObjectURL(blob);
     setBlobUrl(url);
     prevUrl.current = url;

@@ -148,7 +148,7 @@ class GridSearchModel(Model):
         training_ctx = TrainingContext(strategy=self.seasonality_strategy)
         return self._tt_cache.get(data_ctx, training_ctx)
     
-    def fit(self, build_id: str, fold_key: str) -> Tuple[pd.Series, pd.Series, GridSearchCV]:
+    def fit(self, build_id: str, fold_key: str) -> Tuple[pd.Series, pd.Series, GridSearchCV, Dict]:
         """Train the model and return predictions.
         
         This is the unified training method that replaces model-specific methods
@@ -173,11 +173,11 @@ class GridSearchModel(Model):
         grid = self._make_grid()
         training_ctx = TrainingContext(grid=grid)
         
-        y_pred = self._trainer.fit_predict(
+        y_pred, best_params = self._trainer.fit_predict(
             training_ctx, X_train, y_train, X_test, y_test
         )
         
-        return y_pred, y_test, grid
+        return y_pred, y_test, grid, best_params
 
     def _prepare_grid(self, X_train: pd.DataFrame, y_train: pd.Series) -> None:
         """Hook method for subclasses to customize grid preparation.
@@ -331,7 +331,7 @@ class Train(ABC):
     """
     
     @abstractmethod
-    def fit_predict(self, X_train: pd.DataFrame, y_train: pd.Series, X_test: pd.DataFrame, y_test: pd.Series) -> pd.Series:
+    def fit_predict(self, X_train: pd.DataFrame, y_train: pd.Series, X_test: pd.DataFrame, y_test: pd.Series) -> Tuple[pd.Series,Dict]:
         """Train model and make predictions on test set.
         
         Args:
@@ -342,6 +342,7 @@ class Train(ABC):
             
         Returns:
             Predictions on the test set.
+            Best parameters.
         """
         pass
     

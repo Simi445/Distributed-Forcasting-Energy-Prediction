@@ -12,8 +12,11 @@ services:
     build: ./data_preprocess
     ports:
       - "8001:8001"
+    environment:
+      - PYTHONPATH=/app
     volumes:
       - ./my_logger_pkg:/app/my_logger_pkg
+      - ./data_plot:/app/data_plot
   
 
   model-training:
@@ -22,6 +25,7 @@ services:
       - "8002:8002"
     volumes:
       - ./my_logger_pkg:/app/my_logger_pkg
+      - ./data_plot:/app/data_plot
 
   frontend:
     build: ./frontend
