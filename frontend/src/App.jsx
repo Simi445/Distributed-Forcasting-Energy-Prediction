@@ -1,8 +1,9 @@
 import { useState } from "react";
 import Chart from "./components/Chart.jsx";
-import { Check, X, Circle, Loader2 } from 'lucide-react';
+import { Check, X, Circle, Loader2, ArrowLeft } from 'lucide-react';
 import { DottedSurface } from "@/components/ui/dotted-surface";
 import IdleComponent from "@/components/IdleComponent.jsx";
+import MetricsPane from "@/components/MetricsPane.jsx";
 import pipelineConfig from "@/config/pipeline.json";
 
 const { steps: STEPS, modelSteps: MODEL_STEPS, stepStyles } = pipelineConfig;
@@ -30,8 +31,7 @@ export default function App() {
 
 
   const [modelCharts, setModelCharts] = useState([]);
-
-  const [dashboardState, setdashboardState] = useState("");
+  const [selectedModel, setSelectedModel] = useState(null);
 
   async function runStep(endpoint, label) {
     setStepStatus((s) => ({ ...s, [label]: "running" }));
@@ -82,6 +82,9 @@ export default function App() {
           const charts = Object.entries(data.response).map(([key, info]) => ({
             title: `${cardTitle} — ${mode} — ${key}`,
             html: info.html,
+            metrics: info.metrics ?? null,
+            pImportance: info.p_importance ?? null,
+            fImportance: info.f_importance ?? null,
           }));
           setModelCharts((prev) => [...prev, ...charts]);
         }
@@ -162,23 +165,48 @@ export default function App() {
           </div>
         )}
 
-        {(plots || Object.keys(modelStepStatus).length > 0) && (
-          <div className="flex gap-8">
-            <div className="flex-1 min-w-0 transition-all duration-500 ease-in-out">
-              {plots && (
-                <div className="flex flex-col gap-8 w-full">
-                  <Chart title="Energy Consumption" html={plots.energy} />
-                  <Chart title="ACF (lag 24)"        html={plots.acf} />
+        {selectedModel ? (
+          <div className="w-full">
+            <button
+              onClick={() => setSelectedModel(null)}
+              className="flex items-center gap-2 px-4 py-2 mb-6 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to Dashboard
+            </button>
+            <h2 className="text-xl font-bold mb-6">{selectedModel} — Seasonal vs Global</h2>
+            <div className="flex flex-col gap-8 w-full">
+              {modelCharts
+                .filter((c) => c.title.startsWith(selectedModel + " \u2014"))
+                .map((c, i) => (
+                  <div key={i} className="flex gap-4 items-end">
+                    <div className="flex-1 min-w-0">
+                      <Chart title={c.title} html={c.html} />
+                    </div>
+                    {c.metrics && <MetricsPane chart={c} />}
+                  </div>
+                ))}
+            </div>
+          </div>
+        ) : (
+          (plots || Object.keys(modelStepStatus).length > 0) && (
+            <div className="flex gap-8">
+              <div className="flex-1 min-w-0 transition-all duration-500 ease-in-out">
+                {plots && (
+                  <div className="flex flex-col gap-8 w-full">
+                    <Chart title="Energy Consumption" html={plots.energy} />
+                    <Chart title="ACF (lag 24)"        html={plots.acf} />
+                  </div>
+                )}
+              </div>
+
+              {MODEL_STEPS.every(step => modelStepStatus[step.cardTitle] === "done") && (
+                <div className="w-64 flex-shrink-0 transition-all duration-500 ease-in-out">
+                  <IdleComponent changeState={(name) => setSelectedModel(name)} models={MODEL_STEPS}/>
                 </div>
               )}
             </div>
-
-            {MODEL_STEPS.every(step => modelStepStatus[step.cardTitle] === "done") && (
-              <div className="w-64 flex-shrink-0 transition-all duration-500 ease-in-out">
-                <IdleComponent changeState={(id) => setdashboardState(id)} models={MODEL_STEPS}/>
-              </div>
-            )}
-          </div>
+          )
         )}
       </div>
     </div>
