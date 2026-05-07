@@ -19,13 +19,13 @@ export default function Chart({ title, html }) {
   }, [html]);
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2 flex-1">
       <h2 className="text-lg font-semibold text-gray-700">{title}</h2>
       {blobUrl ? (
         <iframe
           src={blobUrl}
           title={title}
-          className="w-full h-[500px] rounded-lg border border-gray-200 bg-white shadow-sm"
+          className="w-full h-full min-h-[500px] flex-1 rounded-lg border border-gray-200 bg-white shadow-sm"
         />
       ) : (
         <div className="h-48 flex items-center justify-center rounded-lg border border-dashed border-gray-300 text-gray-400">

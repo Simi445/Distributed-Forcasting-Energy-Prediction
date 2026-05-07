@@ -35,14 +35,14 @@ class DataLoader(Loader):
         
     def __download_request(self, ip: str, port: str) -> Dict[str, str]:
         my_logger.info("Trying to download data...")
-        response: requests.Response = requests.get(f"http://{ip}:{port}/download_files")
+        response: requests.Response = requests.get(f"http://{ip}:{port}/download_dataset_files")
         response.raise_for_status()
         my_logger.info("Data downloaded.")
         return response.json()["response"] 
     
     def __upload_request(self, ip:str, port:str)->None:
         my_logger.info("No data found in bucket, calling for upload...")
-        response:requests.Response = requests.post(f"http://{ip}:{port}/upload_files")
+        response:requests.Response = requests.post(f"http://{ip}:{port}/upload_dataset_files")
         response.raise_for_status()
         my_logger.info("Data uploaded!")
     

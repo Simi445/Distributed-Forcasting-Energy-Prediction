@@ -1,2 +1,2 @@
-from .classes import Converter,Storage
+from .classes import BulkConverter,Storage
 from .models import *

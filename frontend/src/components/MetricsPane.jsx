@@ -25,18 +25,17 @@ function MetricBadge({ label, value }) {
   );
 }
 
-export default function MetricsPane({ chart }) {
+export default function MetricsPane({ chart, season = "" }) {
   if (!chart?.metrics) return null;
 
-  const parts = chart.title.split(" \u2014 ");
-  const subtitle = parts.slice(1).join(" — ");
-
   return (
-    <div className="w-80 flex-shrink-0 rounded-xl border bg-white shadow-sm p-4 flex flex-col h-[500px]">
-      <h3 className="text-sm font-semibold text-gray-800 border-b pb-2 mb-3">
-        {subtitle}
-      </h3>
-      <div className="flex flex-col gap-1.5 flex-1 justify-center">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-6 flex flex-col flex-1">
+      {season && (
+        <h3 className="text-sm font-semibold text-gray-800 border-b pb-3 mb-6 uppercase tracking-wider">
+          {season}
+        </h3>
+      )}
+      <div className="flex flex-col gap-4 flex-1 justify-center">
         {Object.entries(METRIC_LABELS).map(([key, label]) => (
           <MetricBadge key={key} label={label} value={chart.metrics[key]} />
         ))}

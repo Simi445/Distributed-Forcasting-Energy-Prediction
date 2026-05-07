@@ -38,13 +38,13 @@ class RandomForestImpl(GridSearchModel):
             n_jobs=self.n_jobs
         )
 
-    def permutation_importance(self, build_id: int, fold_key: str, grid_rf: GridSearchCV, iterations: int = 10) -> Dict[str, Dict[str, float]]:
+    def permutation_importance(self, build_id: int, fold_key: str, grid_rf: GridSearchCV, strategy_mode: str = "global", iterations: int = 10) -> Dict[str, Dict[str, float]]:
         data_ctx = DataContext(
             build_id=build_id,
             fold_key=fold_key,
             dataset_b=self.dataset_b
         )
-        training_ctx = TrainingContext(grid=grid_rf)
+        training_ctx = TrainingContext(grid=grid_rf, model_name=self._get_model_name(), strategy=strategy_mode)
         analysis_ctx = FeatureAnalysisContext(
             iterations=iterations,
             state_seed=self.state_seed,
@@ -52,13 +52,13 @@ class RandomForestImpl(GridSearchModel):
         )
         return self._analyzer.permutation_importance(analysis_ctx, data_ctx, training_ctx)
 
-    def feature_importance(self, build_id: int, fold_key: str, grid_rf: GridSearchCV) -> Dict[str, float]:
+    def feature_importance(self, build_id: int, fold_key: str, grid_rf: GridSearchCV, strategy_mode: str = "global") -> Dict[str, float]:
         data_ctx = DataContext(
             build_id=build_id,
             fold_key=fold_key,
             dataset_b=self.dataset_b
         )
-        training_ctx = TrainingContext(grid=grid_rf)
+        training_ctx = TrainingContext(grid=grid_rf, model_name=self._get_model_name(), strategy=strategy_mode)
         analysis_ctx = FeatureAnalysisContext(trainer_fn=self.train_test_fn)
         
         mdi = self._analyzer.feature_importance(analysis_ctx, data_ctx, training_ctx)

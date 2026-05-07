@@ -1,11 +1,11 @@
 from my_logger_pkg import my_logger
 from fastapi import FastAPI, HTTPException, Depends
-from auxiliary import MetricsImpl, ModelManager
+from auxiliary import ModelManager, DefaultFactoryProvider, DataOrganizer, BaseLineDataOrganizer
 from classes import HealthCheck, ModelResponse, Pipeline, SeasonConfig
 from starlette import status
-from non_baseline import NonBaselinePipeline
+from non_baseline import NonBaselinePipeline, RandomForestFactory, SVRFactory, XGBoostFactory
+from baseline import BaselinePipeline, NaiveFactory, MeanFactory
 from typing import Optional
-from baseline import BaselinePipeline
 
 app = FastAPI(
     title="Model Training API",
@@ -13,12 +13,25 @@ app = FastAPI(
     version="1.0.0"
 )
 
+_non_baseline_factory_provider = DefaultFactoryProvider({
+      "random_forest": RandomForestFactory(),
+      "svr": SVRFactory(),
+      "xgboost": XGBoostFactory(),
+  })
+_non_baseline_organizer = DataOrganizer()
+
+_baseline_factory_provider = DefaultFactoryProvider({
+      "naive": NaiveFactory(),
+      "mean": MeanFactory(),
+  })
+
 
 _state_manager_non_baseline = ModelManager()
 _state_manager_baseline = ModelManager()
 
-_non_baseline_pipeline = NonBaselinePipeline(_state_manager_non_baseline)
-_baseline_pipeline = BaselinePipeline(_state_manager_baseline)
+_baseline_organizer = BaseLineDataOrganizer()
+_non_baseline_pipeline = NonBaselinePipeline(_non_baseline_factory_provider, _state_manager_non_baseline, _non_baseline_organizer)
+_baseline_pipeline = BaselinePipeline(_baseline_factory_provider, _state_manager_baseline, _baseline_organizer)
 
 def get_non_baseline_pipeline() -> Pipeline:
     return _non_baseline_pipeline

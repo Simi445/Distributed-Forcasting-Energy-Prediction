@@ -1,6 +1,10 @@
+import os
+
 import pandas as pd
+import pickle
+import requests
 from my_logger_pkg import my_logger
-from typing import Dict, Tuple, Callable, Any, Union
+from typing import Dict, Tuple, Callable, Any, Union, Optional
 from seasonality import NoSeasonalityStrategy
 from classes import (
     DataContext, TrainingContext, FeatureAnalysisContext,
@@ -15,6 +19,52 @@ import numpy as np
 
 WEATHER_COL_RANGE = slice(24, 31)
 TIME_COL_RANGE = slice(31, 37)
+
+ENDPOINT = os.environ.get('CLOUD_ENDPOINT','http://data-cloud:8000')
+
+class GridNetworkManager:
+    """Manages grid serialization, cloud upload/download operations."""
+    
+    def __init__(self):
+        self.cloud_url = ENDPOINT
+    
+    
+    def download_from_cloud(self, model_file: str, local_path: str) -> bool:
+        """Download grid from cloud and save to local path."""
+        try:
+            my_logger.info(f"Downloading grid {model_file} from cloud...")
+            response: requests.Response = requests.get(
+                f"{self.cloud_url}/download_grid_file/{model_file}",
+                timeout=30
+            )
+            response.raise_for_status()
+            
+            with open(local_path, 'wb') as f:
+                f.write(response.content)
+            
+            my_logger.info(f"Grid {model_file} downloaded successfully from cloud.")
+            return True
+        except requests.RequestException as e:
+            my_logger.warning(f"Failed to download grid from cloud: {e}")
+            return False
+    
+    def upload_to_cloud(self, model_file: str, local_path: str) -> bool:
+        """Upload grid to cloud storage."""
+        try:
+            my_logger.info("Uploading grid to cloud...")
+            with open(local_path, 'rb') as f:
+                response: requests.Response = requests.post(
+                    f"{self.cloud_url}/upload_grid_file/{model_file}",
+                    files={'grid': f},
+                    timeout=30
+                )
+                response.raise_for_status()
+            
+            my_logger.info("Grid uploaded to cloud successfully!")
+            return True
+        except requests.RequestException as e:
+            my_logger.warning(f"Failed to upload grid to cloud: {e}")
+            return False
 
 class TrainTestCache(TrainTest):
     def __init__(self):
@@ -52,17 +102,72 @@ class TrainTestCache(TrainTest):
         return (X_train,y_train,X_test,y_test)
 
 class TrainerImpl(Train):
+    def __init__(self):
+        self.network_manager = GridNetworkManager()
+
+    def _grid_artifact_naming(self,model_name:str, strategy:Any, build_id:int, fold_key:str) -> Tuple[str,str]:
+        model_file: str = f'{model_name}_{strategy}_{build_id}_{fold_key}_grid.pkl'
+
+        grid_dir = os.environ.get('GRID_DIR', '/app/grids')
+        os.makedirs(grid_dir, exist_ok=True)
+
+        local_path: str = os.path.join(grid_dir, f'{model_file}')
+
+        return model_file, local_path
+
+    def _grid_retrieval(self, model_file:str, local_path:str, grid:Any, X_train: pd.DataFrame, y_train: pd.Series)->Tuple[Any, Dict]:
+        
+        grid_exists_locally = os.path.isfile(local_path)
+        grid_loaded = False
+        
+        if grid_exists_locally:
+            my_logger.info(f"Loading cached grid from {local_path}")
+            try:
+                with open(local_path, 'rb') as f:
+                    grid = pickle.load(f)
+                best_params: Dict = grid.best_params_
+                my_logger.info(f"Grid loaded. Best params: {best_params}")
+                grid_loaded = True
+            except (EOFError, pickle.UnpicklingError, Exception) as e:
+                my_logger.warning(f"Failed to load cached grid from {local_path}: {e}. Will attempt to download from cloud or refit.")
+        
+        if not grid_loaded:
+            grid_downloaded = self.network_manager.download_from_cloud(model_file, local_path)
+            
+            if grid_downloaded:
+                try:
+                    with open(local_path, 'rb') as f:
+                        grid = pickle.load(f)
+                    best_params: Dict = grid.best_params_
+                    my_logger.info(f"Grid loaded from cloud. Best params: {best_params}")
+                    grid_loaded = True
+                except (EOFError, pickle.UnpicklingError, Exception) as e:
+                    my_logger.warning(f"Failed to load grid from cloud: {e}. Will refit GridSearchCV.")
+            
+            if not grid_loaded:
+                my_logger.info(f"Grid not found locally or in cloud, or file was corrupted. Fitting GridSearchCV...")
+                grid.fit(X_train, y_train)
+                best_params: Dict = grid.best_params_
+                
+                with open(local_path, 'wb') as f:
+                    pickle.dump(grid, f)
+                my_logger.info(f"Grid saved locally to {local_path}. Best params: {best_params}")
+                
+                self.network_manager.upload_to_cloud(model_file, local_path)
+        return grid, best_params 
+    
     @ValidationDecorator.decorator
-    def fit_predict(self, training_ctx: TrainingContext, X_train: pd.DataFrame, y_train: pd.Series, X_test: pd.DataFrame, y_test: pd.Series) -> Tuple[pd.Series,Dict]:
+    def fit_predict(self, training_ctx: TrainingContext, data_ctx:DataContext, X_train: pd.DataFrame, y_train: pd.Series, X_test: pd.DataFrame, y_test: pd.Series) -> Tuple[pd.Series,Dict]:
         my_logger.info(f"Starting GridSearchCV.fit with training set size {len(y_train)}")
-        training_ctx.grid.fit(X_train, y_train)
-        best_params: Dict = training_ctx.grid.best_params_
-        my_logger.info(f"GridSearchCV completed. Best params: {best_params}")
+
+        model_file, local_path = self._grid_artifact_naming(training_ctx.model_name, training_ctx.strategy, data_ctx.build_id, data_ctx.fold_key)
+        training_ctx.grid, best_params = self._grid_retrieval(model_file, local_path, training_ctx.grid, X_train, y_train)
+
         y_pred = pd.Series(training_ctx.grid.predict(X_test), index=y_test.index)
         InputValidator.validate_series(series=y_pred, name="y_pred")
 
         my_logger.debug(f"Predictions generated for test set size {len(y_test)}")
-        return y_pred,best_params
+        return y_pred, best_params
 
     @ValidationDecorator.decorator
     def nofit_predict(self, training_ctx: TrainingContext, X_test: pd.DataFrame) -> pd.Series:
@@ -103,7 +208,7 @@ class FeatureAnalyzer(Analyzer):
         
         my_logger.info(f"Computing permutation_importance for build_id={build_id}, fold_key={fold_key}, iterations={iterations}")
         X_train, y_train, X_test, y_test = trainer_fn(build_id, fold_key)
-        y_pred, _ = self.trainer.fit_predict(training_ctx, X_train, y_train, X_test, y_test)
+        y_pred, _ = self.trainer.fit_predict(training_ctx,data_ctx, X_train, y_train, X_test, y_test)
         
         res: Dict[str, Dict[str, float]] = {}
         columns: Dict[str, list] = self._get_correlated_columns(data_ctx)
@@ -142,7 +247,10 @@ class FeatureAnalyzer(Analyzer):
         trainer_fn, grid = analysis_ctx.trainer_fn, training_ctx.grid
         
         my_logger.info(f"Computing feature_importance for build_id={build_id}, fold_key={fold_key}")
-        X_train, _, _, _ = trainer_fn(build_id, fold_key)
+        X_train, y_train, _, _ = trainer_fn(build_id, fold_key)
+        
+        grid.fit(X_train, y_train)
+        
         model: RandomForestRegressor = grid.best_estimator_
         mdi: pd.Series = pd.Series(model.feature_importances_, index=X_train.columns).sort_values(ascending=False)
         InputValidator.validate_series(series=mdi, name="mdi")

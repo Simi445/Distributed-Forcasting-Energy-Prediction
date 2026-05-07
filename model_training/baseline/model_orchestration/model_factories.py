@@ -1,13 +1,13 @@
 from classes import (
-    ModelFactory
+    ModelFactory, Organizer, SeasonalityStrategy
 )
 from ..naive import NaiveImpl
 from ..mean import MeanImpl
 
 class NaiveFactory(ModelFactory):
-    def create(self) -> NaiveImpl:
-        return NaiveImpl()
+    def create(self, organizer: Organizer, strategy: SeasonalityStrategy) -> NaiveImpl:
+        return NaiveImpl(organizer, strategy)
 
 class MeanFactory(ModelFactory):
-    def create(self) -> MeanImpl:
-        return MeanImpl()
+    def create(self, organizer: Organizer, strategy: SeasonalityStrategy) -> MeanImpl:
+        return MeanImpl(organizer, strategy)

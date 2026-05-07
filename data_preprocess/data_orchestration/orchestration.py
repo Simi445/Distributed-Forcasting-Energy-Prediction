@@ -1,7 +1,7 @@
 from ..my_logger_pkg import my_logger
 from ..classes import ModelBuildings, State, Loader, Merger, Engineer, Selection, FeatureEngineerConfig
 from ..data_pipeline import DataLoader, FeatureEngineer, DataMerger
-from ..data_selection import EnhancedSelection, ModelBSelection
+from ..data_selection import EnhancedSelection, ModelBSelection, FilterBuildings
 from typing import Dict, List, Any, Tuple
 import pandas as pd
 
@@ -93,12 +93,10 @@ class PreprocessingPipeline:
             median_acf: Selection = median_acf
 
         building_type: Dict[int, str] = median_acf.category_buildings(per_building)
-        self.state.add_state("building_type", building_type)
 
         lag_acf: Tuple[Dict[str, Any], Dict[int, float]] = median_acf.calculate_lag_acf(building_type, per_building)
         acf24_per_type, acf24_per_building = lag_acf
 
-        self.state.add_state("acf24_per_type", acf24_per_type)
         self.state.add_state("acf24_per_building", acf24_per_building)
 
         median_buildings = median_acf.median_per_type(acf24_per_type)
@@ -125,7 +123,7 @@ class PreprocessingPipeline:
 
         per_building = self.state.get_state("per_building")
         median_buildings = self.state.get_state("median_buildings")
-        model_build: ModelBuildings = ModelBSelection()
+        model_build: ModelBuildings = ModelBSelection(filter_fn=FilterBuildings().filter_buildings)
 
         final_buildings = model_build.select_final_buildings(per_building, median_buildings)
         self.state.add_state("final_buildings", final_buildings)

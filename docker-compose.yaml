@@ -4,9 +4,14 @@ services:
     build: ./data_cloud
     ports:
       - "8000:8000"
+    environment:
+      - SERVICE_NAME=data_cloud
+      - LOGS_DIR=/app/logs
     volumes:
       - ~/.cloudflare:/root/.cloudflare
       - ./my_logger_pkg:/app/my_logger_pkg
+      - ./logs:/app/logs
+      - ./grids:/app/grids
   
   data-preprocess:
     build: ./data_preprocess
@@ -14,18 +19,26 @@ services:
       - "8001:8001"
     environment:
       - PYTHONPATH=/app
+      - SERVICE_NAME=data_preprocess
+      - LOGS_DIR=/app/logs
     volumes:
       - ./my_logger_pkg:/app/my_logger_pkg
       - ./data_plot:/app/data_plot
+      - ./logs:/app/logs
   
 
   model-training:
     build: ./model_training
     ports:
       - "8002:8002"
+    environment:
+      - SERVICE_NAME=model_training
+      - LOGS_DIR=/app/logs
     volumes:
       - ./my_logger_pkg:/app/my_logger_pkg
       - ./data_plot:/app/data_plot
+      - ./logs:/app/logs
+      - ./grids:/app/grids
 
   frontend:
     build: ./frontend

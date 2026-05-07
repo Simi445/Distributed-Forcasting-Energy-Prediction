@@ -1,22 +1,21 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict
-from .models import FileNames
+from typing import Optional
 
-class Converter(ABC):
+class BulkConverter(ABC):
     """Abstract base class for data conversion components.
     
     Handles converting data files to Parquet format.
     """
     
     @abstractmethod
-    def data_to_parquet(self, names: FileNames) -> List[str]:
-        """Convert data files to Parquet format.
+    def data_to_data(self, location: str, extension: str, **kwargs) -> list[str]:
+        """Convert data files to other data extentions.
         
         Args:
-            names: File names configuration for conversion.
-            
+            location: The folder where the files lie.
+            extension: The new extansion of the files.
         Returns:
-            List of converted Parquet file names.
+            List of converted files.
         """
         pass
 
@@ -27,8 +26,8 @@ class Storage(ABC):
     """
     
     @abstractmethod
-    def upload_parquet_file(self, file_name: str, object_name: str = None) -> bool:
-        """Upload a Parquet file to storage.
+    def upload_file_bucket(self, file_name: str, object_name: str = None) -> bool:
+        """Upload a file to storage.
         
         Args:
             file_name: Local path to the Parquet file.
@@ -40,10 +39,13 @@ class Storage(ABC):
         pass
     
     @abstractmethod
-    def read_parquet_files(self) -> Dict[str, str]:
-        """Read Parquet files from storage.
+    def read_file_bucket(self, file_name: str) -> Optional[str]:
+        """Read a file from storage.
         
+        Args:
+            file_name: Name of the file to read from storage.
+            
         Returns:
-            Dictionary mapping file names to their content or paths.
+            Base64-encoded file content if successful, None otherwise.
         """
         pass

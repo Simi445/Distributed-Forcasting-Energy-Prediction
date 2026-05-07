@@ -2,17 +2,15 @@ import pandas as pd
 from my_logger_pkg import my_logger
 from typing import Dict, Tuple
 from functools import reduce
-from classes import SeasonConfig, BaselinePredictor
+from classes import SeasonConfig, BaselinePredictor, Organizer, SeasonalityStrategy
 from seasonality import SeasonMaskStrategy
-
-from auxiliary import BaseLineDataOrganizer
 
 class MeanImpl(BaselinePredictor):
 
-    def __init__(self, strategy=None):
+    def __init__(self, organizer:Organizer, strategy: SeasonalityStrategy):
         super().__init__(
-            data_preparator=BaseLineDataOrganizer(),
-            strategy=strategy or SeasonMaskStrategy()
+            data_preparator=organizer,
+            strategy=strategy
         )
         my_logger.info(f"Initializing mean model.")
     

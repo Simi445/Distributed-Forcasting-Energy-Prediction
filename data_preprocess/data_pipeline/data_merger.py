@@ -1,12 +1,11 @@
 import pandas as pd
 from ..my_logger_pkg import my_logger
 from typing import Optional
-from ..classes import Merger
+from ..classes import Merger, Loader
 import numpy as np
-from .data_loader import DataLoader
 
 class DataMerger(Merger):
-    def __init__(self, data_loader: DataLoader):
+    def __init__(self, data_loader: Loader):
         self.data_obj = data_loader
         self.full_df: Optional[pd.DataFrame] = None
 

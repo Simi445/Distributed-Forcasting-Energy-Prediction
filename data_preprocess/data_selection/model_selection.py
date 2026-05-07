@@ -1,12 +1,11 @@
-from typing import Dict, List, Tuple
+from typing import Callable, Dict, List, Tuple
 import statistics
 import pandas as pd
-from ..classes import ModelBuildings, FilterConfig
-from .filter import FilterBuildings
+from ..classes import ModelBuildings, FilterConfig, Filter
 from ..my_logger_pkg import my_logger
 
 class ModelBSelection(ModelBuildings):
-    def __init__(self, filter_fn=FilterBuildings().filter_buildings):
+    def __init__(self, filter_fn: Callable):
         self.filter_fn = filter_fn
         my_logger.info("ModelBSelection initialized with custom filter function")
 
@@ -17,7 +16,7 @@ class ModelBSelection(ModelBuildings):
         global_median: float = statistics.median(acf for _, _, acf in category_acfs)
         my_logger.info(f"Global median ACF: {global_median}")
 
-        ranked_neighbors: List[Tuple[str, int, float]] = sorted(category_acfs, key=lambda x: x[2] - global_median)
+        ranked_neighbors: List[Tuple[str, int, float]] = sorted(category_acfs, key=lambda x: abs(x[2] - global_median))
         my_logger.debug(f"Ranked buildings by ACF deviation: {[(c, b, acf) for c, b, acf in ranked_neighbors]}")
 
         selected: Dict[str, int] = {c: b for c, b, _ in ranked_neighbors[:k]}

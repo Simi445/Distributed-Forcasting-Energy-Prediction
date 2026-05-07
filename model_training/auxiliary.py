@@ -1,7 +1,7 @@
 import pandas as pd
 from sklearn.metrics import root_mean_squared_error,mean_absolute_error,r2_score
 from typing import Dict, List, Tuple, Any, Optional
-from classes import Metrics, SeasonConfig, Mask, Organizer
+from classes import Metrics, SeasonConfig, Mask, Organizer, ModelMangerAbstract, FactoryProvider, ModelFactory
 from my_logger_pkg import my_logger
 import numpy as np
 from classes import Model
@@ -114,7 +114,7 @@ class BaseLineDataOrganizer(DataOrganizer):
             my_logger.info(f"Baseline data appended for build_id: {b}")
         return res
     
-class ModelManager:
+class ModelManager(ModelMangerAbstract):
     def __init__(self):
         self.models: Dict[Tuple, Model] = {}
     
@@ -127,3 +127,13 @@ class ModelManager:
         if key not in self.models:
             raise ValueError("Model was not added to manager!")
         return self.models[key]
+
+class DefaultFactoryProvider(FactoryProvider):
+      def __init__(self, factories: dict[str, ModelFactory]):
+          self._factories = factories
+
+      def get_factory(self, model_name: str) -> ModelFactory:
+          try:
+              return self._factories[model_name]
+          except KeyError as e:
+              raise ValueError(f"Unknown model: {model_name}") from e

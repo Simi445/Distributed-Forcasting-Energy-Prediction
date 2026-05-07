@@ -148,7 +148,7 @@ class GridSearchModel(Model):
         training_ctx = TrainingContext(strategy=self.seasonality_strategy)
         return self._tt_cache.get(data_ctx, training_ctx)
     
-    def fit(self, build_id: str, fold_key: str) -> Tuple[pd.Series, pd.Series, GridSearchCV, Dict]:
+    def fit(self, build_id: str, fold_key: str, strategy_mode:str) -> Tuple[pd.Series, pd.Series, GridSearchCV, Dict]:
         """Train the model and return predictions.
         
         This is the unified training method that replaces model-specific methods
@@ -157,7 +157,7 @@ class GridSearchModel(Model):
         Args:
             build_id: The building identifier.
             fold_key: The fold identifier (e.g., 'autumn', 'winter').
-            
+            strategy: The strategy used (e.g., 'global', 'seasonal').
         Returns:
             Tuple of (y_pred, y_test, fitted_grid).
         """
@@ -171,10 +171,10 @@ class GridSearchModel(Model):
         self._prepare_grid(X_train, y_train)
         
         grid = self._make_grid()
-        training_ctx = TrainingContext(grid=grid)
-        
+        training_ctx = TrainingContext(grid=grid, model_name = model_name,strategy=strategy_mode)
+        data_ctx = DataContext(build_id=build_id, fold_key=fold_key, dataset_b=self.dataset_b)
         y_pred, best_params = self._trainer.fit_predict(
-            training_ctx, X_train, y_train, X_test, y_test
+            training_ctx, data_ctx, X_train, y_train, X_test, y_test
         )
         
         return y_pred, y_test, grid, best_params
@@ -360,13 +360,27 @@ class Train(ABC):
         pass
 
 
-class ModelFactory(ABC):
-    """Abstract factory for creating models."""
-    
+class ModelMangerAbstract(ABC):
+    """Abstract class for the model management pipeline."""
+
     @abstractmethod
-    def create(self, dataset_b: Dict, strategy: SeasonalityStrategy) -> GridSearchModel:
+    def add_model(self, key: Tuple, model: Model) -> None:
+        pass
+    @abstractmethod
+    def get_model(self, key: Tuple) -> Model:
         pass
 
+
+class ModelFactory(ABC):
+    """Abstract factory for creating models."""
+    @abstractmethod
+    def create(self, **kwargs: Any) -> Any:
+        pass
+
+class FactoryProvider(ABC):
+      @abstractmethod
+      def get_factory(self, model_name: str) -> ModelFactory:
+          pass
     
 class Analyzer(ABC):
     """Abstract base class for feature analysis components.

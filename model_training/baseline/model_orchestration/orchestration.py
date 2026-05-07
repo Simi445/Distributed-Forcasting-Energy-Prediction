@@ -1,18 +1,21 @@
 from data_plot.plot_helper import PlotHelperModel
 from my_logger_pkg import my_logger
 from typing import Dict, Any, Tuple, Optional
-from classes import SeasonConfig, Pipeline
-from auxiliary import MetricsImpl, ModelManager
-from .model_factories import NaiveFactory, MeanFactory
+from classes import SeasonConfig, Pipeline, ModelMangerAbstract, ModelFactory, Organizer
+from auxiliary import MetricsImpl, FactoryProvider, SeasonMask
 
 class BaselinePipeline(Pipeline):
-    def __init__(self, state_manager: ModelManager, possible_seasons: SeasonConfig = SeasonConfig()):
+    def __init__(
+        self,
+        factory_provider: FactoryProvider,
+        state_manager: ModelMangerAbstract,
+        data_organizer: Organizer,
+        possible_seasons: SeasonConfig = SeasonConfig(),
+    ):
         self.state = state_manager
+        self.factory_provider = factory_provider
+        self.data_organizer = data_organizer
         self.possible_seasons = possible_seasons
-        self.model_factories: Dict[str, Any] = {
-            "naive": NaiveFactory(),
-            "mean": MeanFactory(),
-        }
 
     def _get_or_create_model(self, model_name: str, season: str) -> Any:
         key: Tuple[str, str] = (model_name, season)
@@ -21,7 +24,9 @@ class BaselinePipeline(Pipeline):
         except ValueError:
             my_logger.info(f"Model {model_name} for {season} not found, creating new one")
             try:
-                model = self.model_factories[model_name].create()
+                factory = self.factory_provider.get_factory(model_name)
+                from seasonality import SeasonMaskStrategy
+                model = factory.create(organizer=self.data_organizer, strategy=SeasonMaskStrategy())
                 self.state.add_model(key, model)
                 my_logger.info(f"Added model: {model_name}, season: {season}")
                 return model
@@ -35,8 +40,7 @@ class BaselinePipeline(Pipeline):
         if season is None:
             raise ValueError("Baseline models require a season argument.")
 
-        if model_name not in self.model_factories:
-            raise ValueError(f"Unknown model: {model_name}. Available: {list(self.model_factories.keys())}")
+        self.factory_provider.get_factory(model_name)
 
         if season not in self.possible_seasons.possible_seasons:
             raise ValueError(f"Unknown season: {season}. Available: {self.possible_seasons.possible_seasons}")
@@ -49,7 +53,7 @@ class BaselinePipeline(Pipeline):
             metrics = MetricsImpl.get_metrics(y_pred, y_test)
             html:str = PlotHelperModel.plot_model_pred(build_id=build_id, pred=y_pred,test=y_test)
             
-            all_metrics[build_id] = {"metrics": metrics, "html": html}
+            all_metrics[(build_id,season)] = {"metrics": metrics, "html": html}
             my_logger.info(f"{model_name} model metrics for building {build_id}, {season}: {metrics}")
         return all_metrics
     

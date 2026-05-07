@@ -62,6 +62,7 @@ class DataContext(BaseModel):
 class TrainingContext(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
     
+    model_name: Optional[str] = None
     grid: Optional[Any] = None
     strategy: Optional[Any] = None
 
