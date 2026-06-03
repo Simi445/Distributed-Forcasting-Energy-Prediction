@@ -8,7 +8,7 @@ import {
 
 export function CardSmall({cardTitle, onClick}) {
   return (
-    <Card size="sm" className="mx-auto w-full max-w-sm">
+    <Card size="sm" className="mx-auto w-full max-w-sm rounded-lg">
       <CardHeader>
         <CardTitle>{cardTitle}</CardTitle>
       </CardHeader>

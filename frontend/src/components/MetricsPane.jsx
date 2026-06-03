@@ -29,7 +29,7 @@ export default function MetricsPane({ chart, season = "" }) {
   if (!chart?.metrics) return null;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-6 flex flex-col flex-1">
+    <div className="flex flex-1 flex-col rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
       {season && (
         <h3 className="text-sm font-semibold text-gray-800 border-b pb-3 mb-6 uppercase tracking-wider">
           {season}

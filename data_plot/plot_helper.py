@@ -19,13 +19,31 @@ class PlotHelper(Plot):
         for b_id in self.ids:
             acfs[b_id] = acf24_per_building.get(b_id, 0)
 
-        fig, ax = plt.subplots(figsize=(14, 4))
-        ax.bar(range(len(self.ids)), [acfs.get(b, 0) for b in self.ids], 
-               tick_label=[f'{cat}\n(ID: {b})' for cat, b in zip(self.categories_selected, self.ids)], align='center')
+        values = [acfs.get(b, 0) for b in self.ids]
+        labels = [f'{cat.replace("primary_use_", "").replace("_", " ")}\nID {b}' for cat, b in zip(self.categories_selected, self.ids)]
+
+        fig, ax = plt.subplots(figsize=(12, 4.5))
+        bars = ax.bar(range(len(self.ids)), values, tick_label=labels, align='center', color="#2563eb")
         ax.set_ylabel('ACF (lag 24)')
         ax.set_title('ACF values for selected buildings')
+        ax.set_ylim(0, max(values) * 1.18 if values else 1)
+        ax.grid(axis='y', alpha=0.25)
+        ax.spines[['top', 'right']].set_visible(False)
+
+        for bar, value in zip(bars, values):
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height(),
+                f"{value:.3f}",
+                ha="center",
+                va="bottom",
+                fontsize=9,
+            )
+
+        fig.tight_layout()
 
         html:str = mpld3.fig_to_html(fig)
+        plt.close(fig)
         return html
 
     def plot_energy(self, per_building: Dict[int, pd.DataFrame]) -> str:
@@ -46,6 +64,40 @@ class PlotHelper(Plot):
         plt.tight_layout()
 
         html:str = mpld3.fig_to_html(fig)
+        plt.close(fig)
+        return html
+
+    def plot_energy_for_building(self, per_building: Dict[int, pd.DataFrame], category: str, building_id: int) -> str:
+        my_logger.info(f"Starting energy consumption plot for building {building_id}")
+        fig, ax = plt.subplots(figsize=(12, 5))
+        display_category = category.replace("primary_use_", "").replace("_", " ")
+
+        if building_id in per_building and 'meter_reading' in per_building[building_id].columns:
+            series = per_building[building_id]['meter_reading']
+            ax.plot(series.index, series.values, color="#2563eb", linewidth=0.9)
+            ax.set_title(f'Electricity consumption for {display_category} (Building {building_id})')
+            ax.set_ylabel('Meter reading')
+            ax.set_xlabel('Timestamp')
+            ax.grid(alpha=0.25)
+            ax.margins(x=0.01, y=0.08)
+            fig.autofmt_xdate(rotation=25, ha='right')
+            my_logger.debug(f"Plotted data for building {building_id} ({category})")
+        else:
+            ax.text(
+                0.5,
+                0.5,
+                f'No data for {display_category} (Building {building_id})',
+                ha='center',
+                va='center',
+                transform=ax.transAxes,
+            )
+            my_logger.warning(f"No data available for building {building_id} ({category})")
+
+        ax.spines[['top', 'right']].set_visible(False)
+        fig.tight_layout()
+
+        html: str = mpld3.fig_to_html(fig)
+        plt.close(fig)
         return html
     
 class PlotHelperModel(ModelPlot):

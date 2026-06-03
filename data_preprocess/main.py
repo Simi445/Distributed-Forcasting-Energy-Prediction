@@ -140,7 +140,12 @@ def get_plot(pipeline: PreprocessingPipeline = Depends(get_pipeline)) -> PlotRes
         per_building = pipeline.state.get_state("per_building")
         if acf24_per_building is not None and per_building is not None:
             plots["acf"] = plot_helper.plot_acf(acf24_per_building)
-            plots["energy"] = plot_helper.plot_energy(per_building)
+            for category, building_id in final_buildings.items():
+                plots[f"energy__{building_id}__{category}"] = plot_helper.plot_energy_for_building(
+                    per_building,
+                    category,
+                    building_id,
+                )
         return PlotResponse(status="Plots plotted!", response=plots)
     except Exception as e:
         my_logger.exception(f"Error generating plots: {e}")
