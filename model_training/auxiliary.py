@@ -35,7 +35,7 @@ class SeasonMask(Mask):
     
 class DataOrganizer(Organizer):
     def __init__(self):
-        final_buildings, per_building = Organizer.initialize_organizer()
+        final_buildings, per_building = self.initialize_organizer()
         my_logger.info(f"Initializing DataOrganizer with {len(final_buildings)} buildings")
         self.final_buildings: Dict[str,int] = final_buildings
         self.per_building: Dict[int,pd.DataFrame] = per_building

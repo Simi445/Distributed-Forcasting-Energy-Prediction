@@ -18,7 +18,6 @@ _non_baseline_factory_provider = DefaultFactoryProvider({
       "svr": SVRFactory(),
       "xgboost": XGBoostFactory(),
   })
-_non_baseline_organizer = DataOrganizer()
 
 _baseline_factory_provider = DefaultFactoryProvider({
       "naive": NaiveFactory(),
@@ -26,10 +25,28 @@ _baseline_factory_provider = DefaultFactoryProvider({
   })
 
 
+class LazyOrganizer:
+    def __init__(self, factory, name: str):
+        self._factory = factory
+        self._name = name
+        self._instance = None
+
+    def _get_instance(self):
+        if self._instance is None:
+            my_logger.info(f"Initializing {self._name} organizer on first model request")
+            self._instance = self._factory()
+        return self._instance
+
+    def __getattr__(self, name: str):
+        return getattr(self._get_instance(), name)
+
+
 _state_manager_non_baseline = ModelManager()
 _state_manager_baseline = ModelManager()
 
-_baseline_organizer = BaseLineDataOrganizer()
+_non_baseline_organizer = LazyOrganizer(DataOrganizer, "non-baseline")
+_baseline_organizer = LazyOrganizer(BaseLineDataOrganizer, "baseline")
+
 _non_baseline_pipeline = NonBaselinePipeline(_non_baseline_factory_provider, _state_manager_non_baseline, _non_baseline_organizer)
 _baseline_pipeline = BaselinePipeline(_baseline_factory_provider, _state_manager_baseline, _baseline_organizer)
 

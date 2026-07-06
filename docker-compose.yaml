@@ -12,6 +12,11 @@ services:
       - ./my_logger_pkg:/app/my_logger_pkg
       - ./logs:/app/logs
       - ./grids:/app/grids
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
   
   data-preprocess:
     build: ./data_preprocess
@@ -25,6 +30,14 @@ services:
       - ./my_logger_pkg:/app/my_logger_pkg
       - ./data_plot:/app/data_plot
       - ./logs:/app/logs
+    depends_on:
+      data-cloud:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=5).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
   
 
   model-training:
@@ -39,10 +52,19 @@ services:
       - ./data_plot:/app/data_plot
       - ./logs:/app/logs
       - ./grids:/app/grids
+    depends_on:
+      data-preprocess:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health', timeout=5).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
   frontend:
     build: ./frontend
     ports:
       - "3000:3000"
     depends_on:
-      - data-preprocess
+      model-training:
+        condition: service_healthy

@@ -109,7 +109,7 @@ class PlotHelperModel(ModelPlot):
         ax.plot(pred.index, pred.values, label='Predicted')
         ax.plot(test.index, test.values, label='Actual')
         ax.set_title(f'Electricity consumption for (Building {build_id})')
-        ax.legend()
+        ax.legend(loc='upper left')
 
         plt.tight_layout()
 
