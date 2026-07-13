@@ -73,7 +73,7 @@ class CsvToParquet(BulkConverter):
             self.locations: dict[str,str] = self.__get_migration_files(kwargs)
             
             self.train:pd.DataFrame = pd.read_csv(
-                self.locations[names.train],
+                self.locations[names['train']],
                 delimiter=',',
                 dtype={
                     'building_id': 'int32',
@@ -83,7 +83,7 @@ class CsvToParquet(BulkConverter):
             )
             my_logger.info(f"Loaded train dataframe with {len(self.train)} rows.")
             self.meta:pd.DataFrame = pd.read_csv(
-                self.locations[names.meta],
+                self.locations[names['meta']],
                 delimiter=',',
                 dtype={
                     'building_id': 'int32',
@@ -92,7 +92,7 @@ class CsvToParquet(BulkConverter):
             )
             my_logger.info(f"Loaded meta dataframe with {len(self.meta)} rows.")
             self.weather:pd.DataFrame = pd.read_csv(
-                self.locations[names.weather],
+                self.locations[names['weather']],
                 delimiter=',',
                 dtype={
                     'site_id': 'int8'
@@ -101,6 +101,7 @@ class CsvToParquet(BulkConverter):
             my_logger.info(f"Loaded weather dataframe with {len(self.weather)} rows.")
         except Exception as e:
             my_logger.exception(f'An exception occurred: {e}')
+            raise
 
     def __detect_file_changes(self, file1:str, file2:str) -> bool:
         file1_mod: float = os.path.getmtime(file1)
@@ -124,7 +125,7 @@ class CsvToParquet(BulkConverter):
         for key,value in items.items():
             files = glob.glob(f'{csv_location}/{value}.csv', recursive=True)
             if not files:
-                raise ValueError(f"No files found for {key}: {value}")
+                raise ValueError(f"No CSV file found for {key}: expected {csv_location}/{value}.csv")
             res[value] = files[0]
             my_logger.info(f"Found file for {key}: {files[0]}")
         return res

@@ -12,6 +12,7 @@ services:
       - ./my_logger_pkg:/app/my_logger_pkg
       - ./logs:/app/logs
       - ./grids:/app/grids
+      - ./data_cloud/parquet:/app/parquet
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5).read()"]
       interval: 10s
